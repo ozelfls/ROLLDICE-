@@ -1,8 +1,11 @@
-import { DICE, rollDice, rerollDice } from './engine.mjs';
+import { DICE, MAX_QUANTITY, rollDice, rerollDice } from './engine.mjs';
 
 const diceGrid = document.querySelector('#dice-grid');
 const modeGrid = document.querySelector('#mode-grid');
 const quantityInput = document.querySelector('#quantity');
+const quantityHelp = document.querySelector('#quantity-help');
+const quantityMinus = document.querySelector('#quantity-minus');
+const quantityPlus = document.querySelector('#quantity-plus');
 const modifierInput = document.querySelector('#modifier');
 const resultValue = document.querySelector('#result-value');
 const resultMeta = document.querySelector('#result-meta');
@@ -62,6 +65,19 @@ function updateSelection(container, selected) {
 function selectDice(dice) {
   state.dice = dice;
   updateSelection(diceGrid, dice);
+  const maximum = MAX_QUANTITY[dice];
+  quantityInput.max = String(maximum);
+  const current = Number(quantityInput.value);
+  if (quantityInput.value.trim() === '' || !Number.isInteger(current) || current < 1) {
+    quantityInput.value = '1';
+  } else if (current > maximum) {
+    quantityInput.value = String(maximum);
+  }
+  quantityInput.readOnly = maximum === 1;
+  quantityMinus.disabled = maximum === 1;
+  quantityPlus.disabled = maximum === 1;
+  quantityHelp.textContent = maximum === 1 ? '1 dado por jogada' : `De 1 a ${maximum} dados`;
+  hideError();
 }
 
 function selectMode(mode) {
@@ -75,6 +91,7 @@ diceGrid.setAttribute('aria-label', 'Tipo de dado');
 for (const dice of Object.keys(DICE)) {
   diceGrid.append(createChoice(dice, dice === 'dpercent' ? 'D%' : dice.toUpperCase(), dice === state.dice, diceGrid, selectDice));
 }
+selectDice(state.dice);
 
 modeGrid.setAttribute('role', 'radiogroup');
 modeGrid.setAttribute('aria-label', 'Modo de rolagem');
@@ -90,8 +107,8 @@ function adjustInput(input, delta) {
   hideError();
 }
 
-document.querySelector('#quantity-minus').addEventListener('click', () => adjustInput(quantityInput, -1));
-document.querySelector('#quantity-plus').addEventListener('click', () => adjustInput(quantityInput, 1));
+quantityMinus.addEventListener('click', () => adjustInput(quantityInput, -1));
+quantityPlus.addEventListener('click', () => adjustInput(quantityInput, 1));
 document.querySelector('#modifier-minus').addEventListener('click', () => adjustInput(modifierInput, -1));
 document.querySelector('#modifier-plus').addEventListener('click', () => adjustInput(modifierInput, 1));
 

@@ -48,10 +48,10 @@
             <label for="quantity" class="mb-2 block text-xs font-black uppercase tracking-[.1em]">Quantidade</label>
             <div class="flex items-center gap-1.5">
               <button type="button" id="quantity-minus" class="step-button" aria-label="Diminuir quantidade">−</button>
-              <input id="quantity" type="number" min="1" max="8" step="1" value="1" inputmode="numeric" class="number-field" />
+              <input id="quantity" type="number" min="1" max="1" step="1" value="1" inputmode="numeric" class="number-field" aria-describedby="quantity-help" />
               <button type="button" id="quantity-plus" class="step-button" aria-label="Aumentar quantidade">+</button>
             </div>
-            <p class="mt-2 text-[11px] font-medium text-[var(--muted)]">De 1 a 8 dados</p>
+            <p id="quantity-help" class="mt-2 text-[11px] font-medium text-[var(--muted)]">1 dado por jogada</p>
           </fieldset>
 
           <fieldset class="min-w-0 rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-3">

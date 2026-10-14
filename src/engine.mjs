@@ -9,6 +9,17 @@ export const DICE = Object.freeze({
   dpercent: 10,
 });
 
+export const MAX_QUANTITY = Object.freeze({
+  d4: 12,
+  d6: 12,
+  d8: 12,
+  d10: 4,
+  d12: 4,
+  d20: 1,
+  d100: 1,
+  dpercent: 1,
+});
+
 export const MODES = Object.freeze(['normal', 'vantagem', 'desvantagem']);
 
 function randomFace(sides, random) {
@@ -21,8 +32,10 @@ function randomFace(sides, random) {
 
 export function validateOptions({ dice, quantity, modifier, mode }) {
   if (!Object.hasOwn(DICE, dice)) throw new RangeError('Tipo de dado inválido.');
-  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 8) {
-    throw new RangeError('A quantidade deve estar entre 1 e 8.');
+  const maximum = MAX_QUANTITY[dice];
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > maximum) {
+    const label = dice === 'dpercent' ? 'D%' : dice.toUpperCase();
+    throw new RangeError(`A quantidade de ${label} deve estar entre 1 e ${maximum}.`);
   }
   if (!Number.isInteger(modifier) || modifier < -100 || modifier > 100) {
     throw new RangeError('O modificador deve estar entre -100 e 100.');

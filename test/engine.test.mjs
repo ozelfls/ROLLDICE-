@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DICE, rollDice, rerollDice } from '../src/engine.mjs';
+import { DICE, MAX_QUANTITY, rollDice, rerollDice } from '../src/engine.mjs';
 
 const options = { dice: 'd20', quantity: 1, modifier: 0, mode: 'normal' };
 const sequence = (...values) => {
@@ -25,6 +25,14 @@ test('vantagem escolhe o maior e desvantagem escolhe o menor', () => {
   assert.equal(advantage.results[0].text, '1/20→20');
 });
 
+test('cada tipo de dado respeita seu limite próprio de quantidade', () => {
+  for (const [dice, maximum] of Object.entries(MAX_QUANTITY)) {
+    const allowed = rollDice({ ...options, dice, quantity: maximum }, () => 0);
+    assert.equal(allowed.results.length, maximum, dice);
+    assert.throws(() => rollDice({ ...options, dice, quantity: maximum + 1 }), RangeError, dice);
+  }
+});
+
 test('vários D6 são somados antes de aplicar o modificador uma vez', () => {
   const result = rollDice({ dice: 'd6', quantity: 3, modifier: 2, mode: 'normal' }, sequence(0, 0.5, 0.99));
   assert.equal(result.display, 'Resultado: 1, 4, 6 = 11 + 2 = 13');
@@ -43,7 +51,7 @@ test('D% mantém passos de dez e seu sufixo nos resultados', () => {
 test('críticos só aparecem em um D20', () => {
   assert.equal(rollDice(options, () => 0).critical, 'failure');
   assert.equal(rollDice(options, () => 0.99).critical, 'success');
-  assert.equal(rollDice({ ...options, quantity: 2 }, () => 0.99).critical, null);
+  assert.equal(rollDice({ ...options, dice: 'd6', quantity: 2 }, () => 0.99).critical, null);
 });
 
 test('rerrolagem usa a configuração anterior e sempre impõe desvantagem', () => {
@@ -61,7 +69,7 @@ test('modificadores nos dois limites são aceitos', () => {
 
 test('entradas fora dos limites são rejeitadas', () => {
   for (const changed of [
-    { dice: 'd7' }, { quantity: 0 }, { quantity: 9 }, { quantity: 1.5 },
+    { dice: 'd7' }, { quantity: 0 }, { quantity: 2 }, { quantity: 1.5 },
     { modifier: -101 }, { modifier: 101 }, { modifier: NaN }, { mode: 'outro' },
   ]) {
     assert.throws(() => rollDice({ ...options, ...changed }), RangeError);
