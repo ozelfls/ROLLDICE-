@@ -78,6 +78,8 @@ try {
   assert.equal(await evaluate('document.querySelectorAll("#dice-grid [role=radio]").length'), 8);
   assert.equal(await evaluate('document.querySelectorAll("#mode-grid [role=radio]").length'), 3);
   assert.ok(await evaluate('getComputedStyle(document.body).backgroundColor !== "rgba(0, 0, 0, 0)"'));
+  assert.equal(await evaluate('document.querySelector("#modifier").min'), '-100');
+  assert.equal(await evaluate('document.querySelector("#modifier").max'), '100');
   assert.ok(await evaluate('document.querySelector("#reset-button").getBoundingClientRect().right <= window.innerWidth - 4'), 'A barra de ações ultrapassou a janela.');
   assert.ok(await evaluate('document.documentElement.scrollHeight <= window.innerHeight + 180'), 'A tela inicial ficou alta demais.');
   assert.equal(await evaluate('document.querySelector("#history-panel").open'), false);

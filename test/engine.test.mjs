@@ -54,10 +54,15 @@ test('rerrolagem usa a configuração anterior e sempre impõe desvantagem', () 
   assert.equal(result.critical, 'failure');
 });
 
+test('modificadores nos dois limites são aceitos', () => {
+  assert.equal(rollDice({ ...options, modifier: -100 }, () => 0).display, 'Resultados: 1 -100 = -99 - 💀 FALHA CRÍTICA!');
+  assert.equal(rollDice({ ...options, modifier: 100 }, () => 0).display, 'Resultados: 1 +100 = 101 - 💀 FALHA CRÍTICA!');
+});
+
 test('entradas fora dos limites são rejeitadas', () => {
   for (const changed of [
     { dice: 'd7' }, { quantity: 0 }, { quantity: 9 }, { quantity: 1.5 },
-    { modifier: -11 }, { modifier: 11 }, { modifier: NaN }, { mode: 'outro' },
+    { modifier: -101 }, { modifier: 101 }, { modifier: NaN }, { mode: 'outro' },
   ]) {
     assert.throws(() => rollDice({ ...options, ...changed }), RangeError);
   }

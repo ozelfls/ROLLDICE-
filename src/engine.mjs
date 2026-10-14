@@ -24,8 +24,8 @@ export function validateOptions({ dice, quantity, modifier, mode }) {
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 8) {
     throw new RangeError('A quantidade deve estar entre 1 e 8.');
   }
-  if (!Number.isInteger(modifier) || modifier < -10 || modifier > 10) {
-    throw new RangeError('O modificador deve estar entre -10 e 10.');
+  if (!Number.isInteger(modifier) || modifier < -100 || modifier > 100) {
+    throw new RangeError('O modificador deve estar entre -100 e 100.');
   }
   if (!MODES.includes(mode)) throw new RangeError('Modo de rolagem inválido.');
 }

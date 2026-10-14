@@ -20,7 +20,7 @@ O primeiro comando instala Electron e a ferramenta de compilação do Tailwind. 
 
 - D4, D6, D8, D10, D12, D20, D100 e D% (10% a 100% em passos de dez).
 - De 1 a 8 dados por rolagem.
-- Modificador de −10 a +10.
+- Modificador de −100 a +100.
 - Modos normal, vantagem (maior de dois) e desvantagem (menor de dois).
 - Rerrolagem rápida com desvantagem, mantendo dado, quantidade e modificador da última jogada feita pelo botão Rolar.
 - Sucesso e falha críticos em um único D20.
