@@ -50,10 +50,10 @@ export function rollDice(options, random = Math.random) {
   const suffix = percent ? '%' : '';
   const results = Array.from({ length: quantity }, () => {
     const first = randomFace(DICE[dice], random) * (percent ? 10 : 1);
-    if (mode === 'normal') return { first, selected: first, text: `${first}${suffix}` };
+    if (mode === 'normal') return { first, selected: first, ...(dice === 'd20' ? { rolls: [first], selectedIndex: 0 } : {}), text: `${first}${suffix}` };
     const second = randomFace(DICE[dice], random) * (percent ? 10 : 1);
     const selected = mode === 'vantagem' ? Math.max(first, second) : Math.min(first, second);
-    return { first, second, selected, text: `${first}${suffix}/${second}${suffix}→${selected}${suffix}` };
+    return { first, second, selected, ...(dice === 'd20' ? { rolls: [first, second], selectedIndex: Number(selected === second && first !== second) } : {}), text: `${first}${suffix}/${second}${suffix}→${selected}${suffix}` };
   });
 
   const critical = dice === 'd20' && quantity === 1

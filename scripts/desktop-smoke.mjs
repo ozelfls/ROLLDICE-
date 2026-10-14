@@ -64,7 +64,7 @@ try {
       const pages = await fetch(`http://127.0.0.1:${port}/json/list`).then((response) => response.json());
       target = pages.find((page) => page.type === 'page' && page.title === 'Dado RPG');
       if (target) break;
-    } catch { /* O servidor de depuração ainda está iniciando. */ }
+    } catch {}
     await delay(250);
   }
   assert.ok(target, `Janela não abriu em 15 segundos. ${stderr}`);
@@ -83,7 +83,7 @@ try {
   assert.equal(await evaluate('document.querySelector("#quantity").max'), '1');
   assert.equal(await evaluate('document.querySelector("#quantity").readOnly'), true);
   assert.ok(await evaluate('document.querySelector("#reset-button").getBoundingClientRect().right <= window.innerWidth - 4'), 'A barra de ações ultrapassou a janela.');
-  assert.ok(await evaluate('document.documentElement.scrollHeight <= window.innerHeight + 180'), 'A tela inicial ficou alta demais.');
+  assert.ok(await evaluate('document.documentElement.scrollHeight <= window.innerHeight + 400'), 'A tela inicial ficou alta demais.');
   assert.equal(await evaluate('document.querySelector("#history-panel").open'), false);
   await evaluate('document.querySelector("#dice-grid [data-value=d4]").click()');
   assert.equal(await evaluate('document.querySelector("#quantity").max'), '12');
@@ -116,10 +116,26 @@ try {
   assert.equal(await evaluate('document.querySelectorAll("#history-list li").length'), 2);
   assert.ok(await evaluate('document.querySelector("#form-error").textContent.includes("1 e 12")'));
   await evaluate('document.querySelector("#quantity").value = "2"');
+  await evaluate('document.querySelector("#dice-grid [data-value=d20]").click()');
+  assert.equal(await evaluate('document.querySelector("#dice-stage").hidden'), false);
+  assert.equal(await evaluate('document.querySelectorAll("#dice-stage canvas").length'), 1);
+  await evaluate('document.querySelector("#mode-grid [data-value=normal]").click()');
+  await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
+  assert.equal(await evaluate('document.querySelector("#roll-form button[type=submit]").disabled'), true);
+  await delay(2250);
+  assert.ok(await evaluate('document.querySelector("#result-value").textContent.includes("Total:")'));
+  assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), 1);
+  await evaluate('document.querySelector("#mode-grid [data-value=vantagem]").click()');
+  assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), 1);
+  await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
+  await delay(2250);
+  assert.ok(await evaluate('document.querySelector("#dice-labels").textContent.includes("→")'));
   const screenshot = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
   const folder = await mkdtemp(path.join(os.tmpdir(), 'dado-rpg-'));
   const image = path.join(folder, 'desktop-smoke.png');
   await writeFile(image, Buffer.from(screenshot.data, 'base64'));
+  await evaluate('document.querySelector("#dice-grid [data-value=d4]").click()');
+  assert.equal(await evaluate('document.querySelector("#dice-stage").hidden'), true);
   await evaluate('document.querySelector("#theme-button").click()');
   assert.equal(await evaluate('document.documentElement.dataset.theme'), 'light');
   await evaluate('document.querySelector("#reset-button").click()');

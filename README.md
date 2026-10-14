@@ -14,11 +14,12 @@ npm install
 npm start
 ```
 
-O primeiro comando instala Electron e a ferramenta de compilação do Tailwind. `npm start` compila o CSS e abre a janela do aplicativo.
+O primeiro comando instala Electron, Three.js e as ferramentas de compilação. `npm start` compila a interface e abre a janela do aplicativo.
 
 ## Funcionalidades
 
 - D4, D6, D8, D10, D12, D20, D100 e D% (10% a 100% em passos de dez).
+- D20 tridimensional com vinte faces numeradas, animação de rolagem, quicadas e resultado visível até a próxima interação. Os demais dados mantêm a apresentação atual nesta etapa.
 - D20, D100 e D%: 1 dado por rolagem. Para D20, vantagem e desvantagem fazem duas jogadas do mesmo dado e escolhem o maior ou menor resultado.
 - D10 e D12: até 4 dados por rolagem.
 - D4, D6 e D8: até 12 dados por rolagem.
@@ -35,7 +36,7 @@ O histórico existe somente enquanto a janela está aberta, como no rolador orig
 
 ```sh
 npm test
-npm run build:css
+npm run build
 npm run smoke:desktop
 ```
 
@@ -43,6 +44,9 @@ Estrutura:
 
 - `electron/main.cjs`: janela desktop e configuração de segurança.
 - `src/engine.mjs`: regras de rolagem independentes da interface.
+- `src/die-shapes.mjs`: geometria do D20.
+- `src/dice-view.mjs`: renderização tridimensional do D20 com Three.js.
+- `src/dice-motion.mjs`: trajetória e duração da animação.
 - `src/app.mjs`: estado e interações da janela.
 - `src/index.html` e `src/styles.css`: interface e estilos Tailwind.
 - `test/engine.test.mjs`: testes das regras de rolagem.
