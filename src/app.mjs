@@ -1,0 +1,212 @@
+import { DICE, rollDice, rerollDice } from './engine.mjs';
+
+const diceGrid = document.querySelector('#dice-grid');
+const modeGrid = document.querySelector('#mode-grid');
+const quantityInput = document.querySelector('#quantity');
+const modifierInput = document.querySelector('#modifier');
+const resultValue = document.querySelector('#result-value');
+const resultMeta = document.querySelector('#result-meta');
+const rollBadge = document.querySelector('#roll-badge');
+const formError = document.querySelector('#form-error');
+const rerollButton = document.querySelector('#reroll-button');
+const clearHistoryButton = document.querySelector('#clear-history-button');
+const historyList = document.querySelector('#history-list');
+const historyEmpty = document.querySelector('#history-empty');
+const historyCount = document.querySelector('#history-count');
+const themeButton = document.querySelector('#theme-button');
+
+const state = {
+  dice: 'd20',
+  mode: 'normal',
+  previous: null,
+  history: [],
+  light: false,
+};
+
+const modes = [
+  { value: 'normal', label: 'Normal', help: 'Um lançamento por dado.' },
+  { value: 'vantagem', label: 'Vantagem', help: 'Rola duas vezes e usa o maior resultado.' },
+  { value: 'desvantagem', label: 'Desvantagem', help: 'Rola duas vezes e usa o menor resultado.' },
+];
+
+function createChoice(value, label, selected, group, onSelect) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'choice-button';
+  button.textContent = label;
+  button.dataset.value = value;
+  button.setAttribute('role', 'radio');
+  button.setAttribute('aria-checked', String(selected));
+  button.tabIndex = selected ? 0 : -1;
+  button.addEventListener('click', () => onSelect(value));
+  button.addEventListener('keydown', (event) => {
+    if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key)) return;
+    event.preventDefault();
+    const buttons = [...group.querySelectorAll('[role="radio"]')];
+    const direction = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1;
+    const next = buttons[(buttons.indexOf(button) + direction + buttons.length) % buttons.length];
+    onSelect(next.dataset.value);
+    next.focus();
+  });
+  return button;
+}
+
+function updateSelection(container, selected) {
+  for (const button of container.querySelectorAll('[role="radio"]')) {
+    const active = button.dataset.value === selected;
+    button.setAttribute('aria-checked', String(active));
+    button.tabIndex = active ? 0 : -1;
+  }
+}
+
+function selectDice(dice) {
+  state.dice = dice;
+  updateSelection(diceGrid, dice);
+}
+
+function selectMode(mode) {
+  state.mode = mode;
+  updateSelection(modeGrid, mode);
+  document.querySelector('#mode-description').textContent = modes.find((item) => item.value === mode).help;
+}
+
+diceGrid.setAttribute('role', 'radiogroup');
+diceGrid.setAttribute('aria-label', 'Tipo de dado');
+for (const dice of Object.keys(DICE)) {
+  diceGrid.append(createChoice(dice, dice === 'dpercent' ? 'D%' : dice.toUpperCase(), dice === state.dice, diceGrid, selectDice));
+}
+
+modeGrid.setAttribute('role', 'radiogroup');
+modeGrid.setAttribute('aria-label', 'Modo de rolagem');
+for (const mode of modes) {
+  modeGrid.append(createChoice(mode.value, mode.label, mode.value === state.mode, modeGrid, selectMode));
+}
+
+function adjustInput(input, delta) {
+  const min = Number(input.min);
+  const max = Number(input.max);
+  const current = input.value.trim() === '' ? Number(input.defaultValue) : Number(input.value);
+  input.value = String(Math.min(max, Math.max(min, (Number.isFinite(current) ? current : min) + delta)));
+  hideError();
+}
+
+document.querySelector('#quantity-minus').addEventListener('click', () => adjustInput(quantityInput, -1));
+document.querySelector('#quantity-plus').addEventListener('click', () => adjustInput(quantityInput, 1));
+document.querySelector('#modifier-minus').addEventListener('click', () => adjustInput(modifierInput, -1));
+document.querySelector('#modifier-plus').addEventListener('click', () => adjustInput(modifierInput, 1));
+
+function hideError() {
+  formError.hidden = true;
+  formError.classList.add('hidden');
+  formError.textContent = '';
+}
+
+function showError(message) {
+  formError.textContent = message;
+  formError.hidden = false;
+  formError.classList.remove('hidden');
+}
+
+function readOptions() {
+  if (quantityInput.value.trim() === '' || modifierInput.value.trim() === '') {
+    throw new RangeError('Preencha a quantidade e o modificador.');
+  }
+  return {
+    dice: state.dice,
+    mode: state.mode,
+    quantity: Number(quantityInput.value),
+    modifier: Number(modifierInput.value),
+  };
+}
+
+function formatTime(date) {
+  return date.toLocaleTimeString('pt-BR', { hour12: false });
+}
+
+function renderResult(result, rerolled = false) {
+  resultValue.textContent = result.display;
+  resultValue.dataset.critical = result.critical || '';
+  rollBadge.textContent = result.critical === 'success' ? 'SUCESSO CRÍTICO'
+    : result.critical === 'failure' ? 'FALHA CRÍTICA'
+    : rerolled ? 'RERROLAGEM' : 'ROLAGEM';
+  resultMeta.textContent = `${result.dice === 'dpercent' ? 'D%' : result.dice.toUpperCase()} × ${result.quantity} · ${result.mode} · modificador ${result.modifier >= 0 ? '+' : ''}${result.modifier}`;
+}
+
+function renderHistory() {
+  historyList.replaceChildren();
+  const count = state.history.length;
+  historyCount.textContent = count === 0 ? 'Nenhuma rolagem ainda' : `${count} ${count === 1 ? 'rolagem registrada' : 'rolagens registradas'}`;
+  historyEmpty.classList.toggle('hidden', count > 0);
+  clearHistoryButton.disabled = count === 0;
+
+  for (const entry of [...state.history].reverse()) {
+    const item = document.createElement('li');
+    item.className = 'history-item';
+    const time = document.createElement('time');
+    time.className = 'shrink-0 text-xs font-bold text-[var(--muted)]';
+    time.textContent = entry.time;
+    const display = document.createElement('span');
+    display.className = 'min-w-0 break-words text-sm font-semibold';
+    display.textContent = entry.display;
+    item.append(time, display);
+    historyList.append(item);
+  }
+}
+
+function record(result, rerolled = false) {
+  const time = formatTime(new Date());
+  state.history.push({ time, display: result.display });
+  renderResult(result, rerolled);
+  renderHistory();
+}
+
+document.querySelector('#roll-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  hideError();
+  try {
+    const result = rollDice(readOptions());
+    state.previous = {
+      dice: result.dice,
+      quantity: result.quantity,
+      modifier: result.modifier,
+      mode: result.mode,
+    };
+    record(result);
+    rerollButton.disabled = false;
+  } catch (error) {
+    showError(error.message);
+  }
+});
+
+rerollButton.addEventListener('click', () => {
+  if (!state.previous) return;
+  hideError();
+  try {
+    record(rerollDice(state.previous), true);
+  } catch (error) {
+    showError(error.message);
+  }
+});
+
+document.querySelector('#reset-button').addEventListener('click', () => {
+  resultValue.textContent = 'Selecione um dado e clique em Rolar!';
+  resultValue.dataset.critical = '';
+  resultMeta.textContent = 'Escolha seu dado, modo e modificador abaixo.';
+  rollBadge.textContent = 'PRONTO PARA ROLAR';
+  state.previous = null;
+  rerollButton.disabled = true;
+  hideError();
+});
+
+clearHistoryButton.addEventListener('click', () => {
+  state.history = [];
+  renderHistory();
+});
+
+themeButton.addEventListener('click', () => {
+  state.light = !state.light;
+  document.documentElement.dataset.theme = state.light ? 'light' : 'dark';
+  themeButton.textContent = state.light ? '🌙 Tema escuro' : '☀️ Tema claro';
+});
+
+renderHistory();
