@@ -6,7 +6,7 @@ export const DICE = Object.freeze({
   d12: 12,
   d20: 20,
   d100: 100,
-  dpercent: 10,
+  dpercent: 9,
 });
 
 export const MAX_QUANTITY = Object.freeze({
@@ -50,10 +50,11 @@ export function rollDice(options, random = Math.random) {
   const suffix = percent ? '%' : '';
   const results = Array.from({ length: quantity }, () => {
     const first = randomFace(DICE[dice], random) * (percent ? 10 : 1);
-    if (mode === 'normal') return { first, selected: first, ...(dice === 'd20' ? { rolls: [first], selectedIndex: 0 } : {}), text: `${first}${suffix}` };
+    if (mode === 'normal') return { first, second: null, rolls: [first], selected: first, selectedIndex: 0, text: `${first}${suffix}` };
     const second = randomFace(DICE[dice], random) * (percent ? 10 : 1);
-    const selected = mode === 'vantagem' ? Math.max(first, second) : Math.min(first, second);
-    return { first, second, selected, ...(dice === 'd20' ? { rolls: [first, second], selectedIndex: Number(selected === second && first !== second) } : {}), text: `${first}${suffix}/${second}${suffix}→${selected}${suffix}` };
+    const selectedIndex = mode === 'vantagem' ? Number(second > first) : Number(second < first);
+    const selected = selectedIndex === 0 ? first : second;
+    return { first, second, rolls: [first, second], selected, selectedIndex, text: `${first}${suffix}/${second}${suffix}→${selected}${suffix}` };
   });
 
   const critical = dice === 'd20' && quantity === 1
@@ -61,20 +62,12 @@ export function rollDice(options, random = Math.random) {
     : null;
   const criticalText = critical === 'success' ? ' - 🗿 SUCESSO CRÍTICO!'
     : critical === 'failure' ? ' - 💀 FALHA CRÍTICA!' : '';
-  const rollText = results.map((result) => result.text).join(', ');
-  let summary;
-
-  if (dice === 'd6' && quantity > 1) {
-    const total = results.reduce((sum, result) => sum + result.selected, 0);
-    summary = modifier === 0
-      ? `Resultado: ${rollText} = ${total}`
-      : `Resultado: ${rollText} = ${total} + ${modifier} = ${total + modifier}`;
-  } else if (modifier !== 0) {
-    const modified = results.map((result) => `${result.selected + modifier}${suffix}`).join(', ');
-    summary = `Resultados: ${rollText} ${modifier > 0 ? '+' : ''}${modifier}${suffix} = ${modified}`;
-  } else {
-    summary = `Resultados: ${rollText}`;
-  }
+  const subtotal = results.reduce((sum, result) => sum + result.selected, 0);
+  const total = subtotal + modifier;
+  const label = percent ? 'D%' : dice.toUpperCase();
+  const rollLabel = quantity === 1 ? label : `${quantity}${label}`;
+  const individual = results.map((result) => result.text).join(' + ');
+  const display = `${rollLabel}: ${individual} | Subtotal: ${subtotal}${suffix} | Modificador: ${modifier >= 0 ? '+' : ''}${modifier} | Total: ${total}${suffix}${criticalText}`;
 
   return {
     dice,
@@ -82,13 +75,16 @@ export function rollDice(options, random = Math.random) {
     modifier,
     mode,
     results,
+    subtotal,
+    total,
+    individual,
     critical,
-    display: `${summary}${criticalText}`,
+    display,
   };
 }
 
 export function rerollDice(previous, random = Math.random) {
   if (!previous) throw new Error('Faça uma rolagem antes de rerrolar.');
   const result = rollDice({ ...previous, mode: 'desvantagem' }, random);
-  return { ...result, display: result.display.replace(/^Resultados?:/, 'Rerol (Desvantagem):') };
+  return { ...result, display: `Rerol (Desvantagem) · ${result.display}` };
 }

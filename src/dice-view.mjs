@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createD20Shape } from './die-shapes.mjs';
+import { createDieShape } from './die-shapes.mjs';
 import { motionAt, ROLL_DURATION } from './dice-motion.mjs';
 
 const palette = [0xffe5b0, 0xffd489, 0xf9c774, 0xffe9bf];
@@ -26,7 +26,7 @@ function labelTexture(value) {
 
 function modelFor(dice) {
   if (shapeCache.has(dice)) return shapeCache.get(dice);
-  const shape = createD20Shape();
+  const shape = createDieShape(dice);
   shapeCache.set(dice, shape);
   return shape;
 }
@@ -50,15 +50,15 @@ function makeDie(dice) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.computeVertexNormals();
-    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: palette[index % palette.length], roughness: .34, metalness: .09, side: THREE.DoubleSide, transparent: true }));
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: palette[index % palette.length], roughness: .42, metalness: .04, side: THREE.FrontSide, flatShading: true }));
     group.add(mesh);
     const edges = [];
     for (let corner = 0; corner < points.length; corner++) edges.push(...points[corner], ...points[(corner + 1) % points.length]);
     const edgeGeometry = new THREE.BufferGeometry();
     edgeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(edges, 3));
     group.add(new THREE.LineSegments(edgeGeometry, new THREE.LineBasicMaterial({ color: 0x8c5c41, transparent: true, opacity: .72 })));
-    const labelSize = dice === 'd100' ? .18 : Math.min(.53, Math.max(.25, Math.min(...points.map((point) => point.distanceTo(center))) * 1.05));
-    const label = new THREE.Mesh(new THREE.PlaneGeometry(labelSize, labelSize), new THREE.MeshBasicMaterial({ map: labelTexture(face.label), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    const labelSize = dice === 'd100' ? .17 : Math.min(.53, Math.max(.25, Math.min(...points.map((point) => point.distanceTo(center))) * 1.05));
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(labelSize, labelSize), new THREE.MeshBasicMaterial({ map: labelTexture(face.label), transparent: true, depthWrite: false, side: THREE.FrontSide }));
     label.position.copy(center).addScaledVector(normal, .018);
     label.quaternion.copy(localFrame);
     group.add(label);
@@ -141,9 +141,11 @@ export class DiceView {
     const width = Math.max(1, this.stage.clientWidth);
     const height = Math.max(1, this.stage.clientHeight);
     const aspect = width / height;
-    const xStep = Math.min(2.65, (this.viewSpan * aspect - .5) / columns);
+    const xStep = Math.min(quantity <= 4 ? 4.2 : 3.4, (this.viewSpan * aspect - .5) / columns);
     const zStep = Math.min(1.8, (this.viewSpan - .4) / rows);
-    const scale = Math.min(1.5, (pair ? 1.05 : 1.5) * Math.min(1, xStep / (pair ? 2.5 : 1.7), zStep / 1.7));
+    const scale = dice === 'd100' && quantity === 1
+      ? pair ? 1.3 : 1.5
+      : Math.min(pair ? 1.1 : 1.5, xStep / (pair ? 3.85 : 1.8), zStep / 1.7);
     for (let slot = 0; slot < quantity; slot++) {
       const row = Math.floor(slot / columns);
       const inRow = Math.min(columns, quantity - row * columns);
@@ -153,7 +155,7 @@ export class DiceView {
       for (let member = 0; member < (pair ? 2 : 1); member++) {
         const model = makeDie(dice);
         const root = new THREE.Group();
-        root.position.set(centerX + (pair ? (member - .5) * scale * 1.75 : 0), 0, centerZ);
+        root.position.set(centerX + (pair ? (member - .5) * scale * (dice === 'd100' ? 2.1 : 1.75) : 0), 0, centerZ);
         model.group.scale.setScalar(scale);
         root.add(model.group);
         const shadow = new THREE.Mesh(new THREE.CircleGeometry(scale * 1.05, 32), new THREE.MeshBasicMaterial({ color: 0x552c1d, transparent: true, opacity: .13, depthWrite: false }));
@@ -184,10 +186,8 @@ export class DiceView {
           ring.position.y = -1.1 * scale;
           item.root.add(ring);
         } else item.model.group.traverse((part) => {
-          if (part.material && 'opacity' in part.material) {
-            part.material.transparent = true;
-            part.material.opacity = .38;
-          }
+          if (part.material?.isMeshStandardMaterial) part.material.color.lerp(new THREE.Color(0x9b8377), .62);
+          if (part.material?.isMeshBasicMaterial || part.material?.isLineBasicMaterial) part.material.opacity = .45;
         });
       }
     }

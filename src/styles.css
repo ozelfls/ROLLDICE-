@@ -121,6 +121,8 @@ body {
   grid-template-columns: repeat(var(--chip-columns, 1), minmax(0, 1fr));
   gap: 5px;
   margin-top: 6px;
+  max-height: 92px;
+  overflow: auto;
   text-align: center;
 }
 

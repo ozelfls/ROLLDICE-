@@ -13,7 +13,7 @@ test('todos os tipos de dado alcançam os valores mínimo e máximo', () => {
     const minimum = rollDice({ ...options, dice }, () => 0).results[0].selected;
     const maximum = rollDice({ ...options, dice }, () => 1 - Number.EPSILON).results[0].selected;
     assert.equal(minimum, dice === 'dpercent' ? 10 : 1);
-    assert.equal(maximum, dice === 'dpercent' ? 100 : sides);
+    assert.equal(maximum, dice === 'dpercent' ? 90 : sides);
   }
 });
 
@@ -35,17 +35,17 @@ test('cada tipo de dado respeita seu limite próprio de quantidade', () => {
 
 test('vários D6 são somados antes de aplicar o modificador uma vez', () => {
   const result = rollDice({ dice: 'd6', quantity: 3, modifier: 2, mode: 'normal' }, sequence(0, 0.5, 0.99));
-  assert.equal(result.display, 'Resultado: 1, 4, 6 = 11 + 2 = 13');
+  assert.equal(result.display, '3D6: 1 + 4 + 6 | Subtotal: 11 | Modificador: +2 | Total: 13');
 });
 
-test('demais dados recebem o modificador individualmente', () => {
+test('todos os dados são somados antes do modificador', () => {
   const result = rollDice({ dice: 'd4', quantity: 2, modifier: -1, mode: 'normal' }, sequence(0, 0.99));
-  assert.equal(result.display, 'Resultados: 1, 4 -1 = 0, 3');
+  assert.equal(result.display, '2D4: 1 + 4 | Subtotal: 5 | Modificador: -1 | Total: 4');
 });
 
 test('D% mantém passos de dez e seu sufixo nos resultados', () => {
   const result = rollDice({ dice: 'dpercent', quantity: 1, modifier: 2, mode: 'vantagem' }, sequence(0, 0.99));
-  assert.equal(result.display, 'Resultados: 10%/100%→100% +2% = 102%');
+  assert.equal(result.display, 'D%: 10%/90%→90% | Subtotal: 90% | Modificador: +2 | Total: 92%');
 });
 
 test('críticos só aparecem em um D20', () => {
@@ -58,13 +58,13 @@ test('rerrolagem usa a configuração anterior e sempre impõe desvantagem', () 
   const result = rerollDice({ dice: 'd20', quantity: 1, modifier: 1, mode: 'vantagem' }, sequence(0.95, 0));
   assert.equal(result.mode, 'desvantagem');
   assert.equal(result.results[0].selected, 1);
-  assert.match(result.display, /^Rerol \(Desvantagem\): 20\/1→1 \+1 = 2/);
+  assert.match(result.display, /^Rerol \(Desvantagem\) · D20: 20\/1→1 \| Subtotal: 1 \| Modificador: \+1 \| Total: 2/);
   assert.equal(result.critical, 'failure');
 });
 
 test('modificadores nos dois limites são aceitos', () => {
-  assert.equal(rollDice({ ...options, modifier: -100 }, () => 0).display, 'Resultados: 1 -100 = -99 - 💀 FALHA CRÍTICA!');
-  assert.equal(rollDice({ ...options, modifier: 100 }, () => 0).display, 'Resultados: 1 +100 = 101 - 💀 FALHA CRÍTICA!');
+  assert.equal(rollDice({ ...options, modifier: -100 }, () => 0).display, 'D20: 1 | Subtotal: 1 | Modificador: -100 | Total: -99 - 💀 FALHA CRÍTICA!');
+  assert.equal(rollDice({ ...options, modifier: 100 }, () => 0).display, 'D20: 1 | Subtotal: 1 | Modificador: +100 | Total: 101 - 💀 FALHA CRÍTICA!');
 });
 
 test('entradas fora dos limites são rejeitadas', () => {
@@ -75,4 +75,25 @@ test('entradas fora dos limites são rejeitadas', () => {
     assert.throws(() => rollDice({ ...options, ...changed }), RangeError);
   }
   assert.throws(() => rerollDice(null), /antes de rerrolar/);
+});
+
+test('todos os dados e modos preservam seleção, quantidade e soma', () => {
+  for (const [dice, maximum] of Object.entries(MAX_QUANTITY)) {
+    for (const mode of ['normal', 'vantagem', 'desvantagem']) {
+      for (const modifier of [-100, 0, 100]) {
+        const values = Array.from({ length: maximum * (mode === 'normal' ? 1 : 2) }, (_, index) => index % 2 ? .999 : 0);
+        const result = rollDice({ dice, quantity: maximum, mode, modifier }, sequence(...values));
+        assert.equal(result.results.length, maximum);
+        assert.equal(result.subtotal, result.results.reduce((sum, item) => sum + item.selected, 0));
+        assert.equal(result.total, result.subtotal + modifier);
+        for (const item of result.results) {
+          assert.equal(item.rolls.length, mode === 'normal' ? 1 : 2);
+          assert.equal(item.selected, item.rolls[item.selectedIndex]);
+          assert.equal(item.selected, mode === 'vantagem' ? Math.max(...item.rolls) : mode === 'desvantagem' ? Math.min(...item.rolls) : item.first);
+          assert.ok(item.selected >= (dice === 'dpercent' ? 10 : 1));
+          assert.ok(item.selected <= (dice === 'dpercent' ? 90 : DICE[dice]));
+        }
+      }
+    }
+  }
 });

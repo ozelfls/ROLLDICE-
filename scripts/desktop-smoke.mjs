@@ -74,8 +74,17 @@ try {
     if (response.exceptionDetails) throw new Error(response.exceptionDetails.text);
     return response.result.value;
   };
+  const waitFor = async (expression) => {
+    for (let attempt = 0; attempt < 60; attempt++) {
+      if (await evaluate(expression)) return;
+      await delay(100);
+    }
+    throw new Error(`A interface não terminou: ${expression}`);
+  };
+  const folder = await mkdtemp(path.join(os.tmpdir(), 'dado-rpg-'));
 
-  assert.equal(await evaluate('document.querySelectorAll("#dice-grid [role=radio]").length'), 8);
+  await waitFor('document.querySelectorAll("#dice-grid [role=radio]").length === 8');
+  assert.equal(await evaluate('document.querySelectorAll("#dice-grid [role=radio]").length'), 8, stderr);
   assert.equal(await evaluate('document.querySelectorAll("#mode-grid [role=radio]").length'), 3);
   assert.ok(await evaluate('getComputedStyle(document.body).backgroundColor !== "rgba(0, 0, 0, 0)"'));
   assert.equal(await evaluate('document.querySelector("#modifier").min'), '-100');
@@ -101,12 +110,13 @@ try {
   await evaluate('document.querySelector("#quantity").value = "2"');
   await evaluate('document.querySelector("#modifier").value = "3"');
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
-  assert.equal(await evaluate('document.querySelectorAll("#history-list li").length'), 1);
+  assert.equal(await evaluate('document.querySelector("#roll-form button[type=submit]").disabled'), true);
+  await waitFor('document.querySelectorAll("#history-list li").length === 1');
   assert.equal(await evaluate('document.querySelector("#reroll-button").disabled'), false);
-  assert.ok(await evaluate('document.querySelector("#result-value").textContent.includes(" = ")'));
+  assert.ok(await evaluate('document.querySelector("#result-value").textContent.includes("Total:")'));
   await evaluate('document.querySelector("#reroll-button").click()');
-  assert.equal(await evaluate('document.querySelectorAll("#history-list li").length'), 2);
-  assert.ok(await evaluate('document.querySelector("#result-value").textContent.startsWith("Rerol (Desvantagem):")'));
+  await waitFor('document.querySelectorAll("#history-list li").length === 2');
+  assert.ok(await evaluate('document.querySelector("#result-meta").textContent.includes("rerrolagem")'));
   await evaluate('document.querySelector("#quantity").value = "0"');
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
   assert.equal(await evaluate('document.querySelectorAll("#history-list li").length'), 2);
@@ -115,27 +125,42 @@ try {
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
   assert.equal(await evaluate('document.querySelectorAll("#history-list li").length'), 2);
   assert.ok(await evaluate('document.querySelector("#form-error").textContent.includes("1 e 12")'));
-  await evaluate('document.querySelector("#quantity").value = "2"');
+  for (const [dice, maximum] of [['d4', 12], ['d6', 12], ['d8', 12], ['d10', 4], ['d12', 4], ['d20', 1], ['d100', 1], ['dpercent', 1]]) {
+    await evaluate(`document.querySelector('#dice-grid [data-value=${dice}]').click()`);
+    await evaluate(`document.querySelector('#quantity').value = '${maximum}'; document.querySelector('#quantity').dispatchEvent(new Event('input'))`);
+    assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), maximum);
+    assert.equal(await evaluate('document.querySelector("#quantity").max'), String(maximum));
+    await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
+    const expectedCount = 3 + ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100', 'dpercent'].indexOf(dice);
+    await waitFor(`document.querySelectorAll('#history-list li').length === ${expectedCount}`);
+    assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip[data-selected=true]").length'), maximum);
+    assert.ok(await evaluate('document.querySelector("#result-value").textContent.includes("Total:")'));
+    if (dice === 'd4' || dice === 'd100') {
+      const capture = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+      await writeFile(path.join(folder, `${dice}.png`), Buffer.from(capture.data, 'base64'));
+    }
+  }
   await evaluate('document.querySelector("#dice-grid [data-value=d20]").click()');
-  assert.equal(await evaluate('document.querySelector("#dice-stage").hidden'), false);
   assert.equal(await evaluate('document.querySelectorAll("#dice-stage canvas").length'), 1);
   await evaluate('document.querySelector("#mode-grid [data-value=normal]").click()');
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
   assert.equal(await evaluate('document.querySelector("#roll-form button[type=submit]").disabled'), true);
-  await delay(2250);
+  await waitFor('document.querySelectorAll("#history-list li").length === 11');
   assert.ok(await evaluate('document.querySelector("#result-value").textContent.includes("Total:")'));
   assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), 1);
   await evaluate('document.querySelector("#mode-grid [data-value=vantagem]").click()');
   assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), 1);
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
-  await delay(2250);
+  await waitFor('document.querySelectorAll("#history-list li").length === 12');
   assert.ok(await evaluate('document.querySelector("#dice-labels").textContent.includes("→")'));
   const screenshot = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
-  const folder = await mkdtemp(path.join(os.tmpdir(), 'dado-rpg-'));
   const image = path.join(folder, 'desktop-smoke.png');
   await writeFile(image, Buffer.from(screenshot.data, 'base64'));
-  await evaluate('document.querySelector("#dice-grid [data-value=d4]").click()');
-  assert.equal(await evaluate('document.querySelector("#dice-stage").hidden'), true);
+  await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
+  assert.equal(await evaluate('document.querySelector("#roll-form button[type=submit]").disabled'), true);
+  await evaluate('document.querySelector("#reset-button").click()');
+  await waitFor('document.querySelector("#roll-form button[type=submit]").disabled === false');
+  assert.equal(await evaluate('document.querySelectorAll("#history-list li").length'), 12);
   await evaluate('document.querySelector("#theme-button").click()');
   assert.equal(await evaluate('document.documentElement.dataset.theme'), 'light');
   await evaluate('document.querySelector("#reset-button").click()');

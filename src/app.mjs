@@ -19,9 +19,7 @@ const historyEmpty = document.querySelector('#history-empty');
 const historyCount = document.querySelector('#history-count');
 const themeButton = document.querySelector('#theme-button');
 const rollButton = document.querySelector('#roll-form button[type="submit"]');
-const diceStage = document.querySelector('#dice-stage');
-const diceLabels = document.querySelector('#dice-labels');
-const view = new DiceView(diceStage, diceLabels);
+const view = new DiceView(document.querySelector('#dice-stage'), document.querySelector('#dice-labels'));
 
 const state = {
   dice: 'd20',
@@ -98,10 +96,8 @@ function selectMode(mode) {
 }
 
 function preview() {
-  const d20 = state.dice === 'd20';
-  diceStage.hidden = !d20;
-  diceLabels.hidden = !d20;
-  if (d20) view.show('d20', 1, state.mode);
+  const quantity = Math.min(MAX_QUANTITY[state.dice], Math.max(1, Number(quantityInput.value) || 1));
+  view.show(state.dice, quantity, state.mode);
 }
 
 diceGrid.setAttribute('role', 'radiogroup');
@@ -125,8 +121,9 @@ function adjustInput(input, delta) {
   hideError();
 }
 
-quantityMinus.addEventListener('click', () => adjustInput(quantityInput, -1));
-quantityPlus.addEventListener('click', () => adjustInput(quantityInput, 1));
+quantityMinus.addEventListener('click', () => { adjustInput(quantityInput, -1); if (state.rolling) state.previewPending = true; else preview(); });
+quantityPlus.addEventListener('click', () => { adjustInput(quantityInput, 1); if (state.rolling) state.previewPending = true; else preview(); });
+quantityInput.addEventListener('input', () => { if (state.rolling) state.previewPending = true; else preview(); });
 document.querySelector('#modifier-minus').addEventListener('click', () => adjustInput(modifierInput, -1));
 document.querySelector('#modifier-plus').addEventListener('click', () => adjustInput(modifierInput, 1));
 
@@ -159,16 +156,16 @@ function formatTime(date) {
 }
 
 function renderResult(result, rerolled = false) {
-  resultValue.textContent = result.dice === 'd20'
-    ? `D20: ${result.results[0].text} · Modificador: ${result.modifier >= 0 ? '+' : ''}${result.modifier} · Total: ${result.results[0].selected + result.modifier}`
-    : result.display;
+  const percent = result.dice === 'dpercent' ? '%' : '';
+  const label = result.dice === 'dpercent' ? 'D%' : result.dice.toUpperCase();
+  resultValue.textContent = result.quantity > 4
+    ? `${result.quantity}${label} · Total: ${result.total}${percent}`
+    : `${result.quantity > 1 ? result.quantity : ''}${label}: ${result.individual} · Total: ${result.total}${percent}`;
   resultValue.dataset.critical = result.critical || '';
   rollBadge.textContent = result.critical === 'success' ? 'SUCESSO CRÍTICO'
     : result.critical === 'failure' ? 'FALHA CRÍTICA'
     : rerolled ? 'RERROLAGEM' : 'ROLAGEM';
-  resultMeta.textContent = result.dice === 'd20'
-    ? `Resultado do dado: ${result.results[0].selected} · ${result.mode}${rerolled ? ' · rerrolagem' : ''}`
-    : `${result.dice === 'dpercent' ? 'D%' : result.dice.toUpperCase()} × ${result.quantity} · ${result.mode} · modificador ${result.modifier >= 0 ? '+' : ''}${result.modifier}`;
+  resultMeta.textContent = `${result.quantity > 4 ? `Dados: ${result.results.map((item) => item.selected).join(' + ')} · ` : ''}Subtotal: ${result.subtotal}${percent} · Modificador: ${result.modifier >= 0 ? '+' : ''}${result.modifier} · ${result.mode}${rerolled ? ' · rerrolagem' : ''}`;
 }
 
 function renderHistory() {
@@ -199,15 +196,15 @@ function record(result, rerolled = false) {
   renderHistory();
 }
 
-async function playD20(result, rerolled = false) {
+async function play(result, rerolled = false) {
   state.rolling = true;
   rollButton.disabled = true;
   rerollButton.disabled = true;
   rollBadge.textContent = 'ROLANDO...';
-  resultValue.textContent = 'O D20 está rolando...';
+  resultValue.textContent = 'Os dados estão rolando...';
   try {
-    await view.animate('d20', result);
-    record(result, rerolled);
+    const completed = await view.animate(result.dice, result);
+    if (completed) record(result, rerolled);
   } finally {
     state.rolling = false;
     rollButton.disabled = false;
@@ -229,11 +226,7 @@ document.querySelector('#roll-form').addEventListener('submit', async (event) =>
       modifier: result.modifier,
       mode: result.mode,
     };
-    if (result.dice === 'd20') await playD20(result);
-    else {
-      record(result);
-      rerollButton.disabled = false;
-    }
+    await play(result);
   } catch (error) {
     showError(error.message);
   }
@@ -244,15 +237,14 @@ rerollButton.addEventListener('click', async () => {
   hideError();
   try {
     const result = rerollDice(state.previous);
-    if (result.dice === 'd20') await playD20(result, true);
-    else record(result, true);
+    await play(result, true);
   } catch (error) {
     showError(error.message);
   }
 });
 
 document.querySelector('#reset-button').addEventListener('click', () => {
-  if (state.rolling) return;
+  if (state.rolling) view.clear();
   resultValue.textContent = 'Selecione um dado e clique em Rolar!';
   resultValue.dataset.critical = '';
   resultMeta.textContent = 'Escolha seu dado, modo e modificador abaixo.';
