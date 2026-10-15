@@ -202,6 +202,7 @@ async function play(result, rerolled = false) {
   rerollButton.disabled = true;
   rollBadge.textContent = 'ROLANDO...';
   resultValue.textContent = 'Os dados estão rolando...';
+  resultMeta.textContent = `${result.dice === 'dpercent' ? 'D%' : result.dice.toUpperCase()} · lançamento em andamento`;
   try {
     const completed = await view.animate(result.dice, result);
     if (completed) record(result, rerolled);

@@ -145,6 +145,11 @@ try {
   await evaluate('document.querySelector("#mode-grid [data-value=normal]").click()');
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
   assert.equal(await evaluate('document.querySelector("#roll-form button[type=submit]").disabled'), true);
+  await delay(650);
+  assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), 0);
+  assert.ok(await evaluate('document.querySelector("#result-meta").textContent.includes("lançamento em andamento")'));
+  const flight = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+  await writeFile(path.join(folder, 'd20-flight.png'), Buffer.from(flight.data, 'base64'));
   await waitFor('document.querySelectorAll("#history-list li").length === 11');
   assert.ok(await evaluate('document.querySelector("#result-value").textContent.includes("Total:")'));
   assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), 1);

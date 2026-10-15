@@ -19,7 +19,7 @@ O primeiro comando instala Electron, Three.js e as ferramentas de compilação. 
 ## Funcionalidades
 
 - D4, D6, D8, D10, D12, D20, D100 e D% (10% a 90% em passos de dez; a face 00 é decorativa).
-- Todos os dados têm modelos tridimensionais com faces numeradas, rotação, quicadas e resultado visível até a próxima interação.
+- Todos os dados têm modelos tridimensionais com faces numeradas e resultado visível até a próxima interação. D4, D6, D8 e D20 atravessam o painel com trajetórias variáveis, gravidade, quicadas e colisões com as bordas e entre dados.
 - D20, D100 e D%: 1 dado por rolagem. Para D20, vantagem e desvantagem fazem duas jogadas do mesmo dado e escolhem o maior ou menor resultado.
 - D10 e D12: até 4 dados por rolagem.
 - D4, D6 e D8: até 12 dados por rolagem.

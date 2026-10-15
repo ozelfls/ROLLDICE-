@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { createDieShape } from './die-shapes.mjs';
-import { motionAt, ROLL_DURATION } from './dice-motion.mjs';
+import { motionAt, createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, PHYSICAL_PHASE, ROLL_DURATION } from './dice-motion.mjs';
 
 const palette = [0xffe5b0, 0xffd489, 0xf9c774, 0xffe9bf];
 const labelCache = new Map();
 const shapeCache = new Map();
+const physicalDice = new Set(['d4', 'd6', 'd8', 'd20']);
 
 function labelTexture(value) {
   const key = String(value);
@@ -121,7 +122,10 @@ export class DiceView {
     this.token++;
     for (const item of this.items) {
       this.scene.remove(item.root);
-      item.model.group.traverse((part) => {
+      this.scene.remove(item.shadow);
+      item.shadow.geometry.dispose();
+      item.shadow.material.dispose();
+      item.root.traverse((part) => {
         part.geometry?.dispose();
         part.material?.dispose();
       });
@@ -160,13 +164,12 @@ export class DiceView {
         root.add(model.group);
         const shadow = new THREE.Mesh(new THREE.CircleGeometry(scale * 1.05, 32), new THREE.MeshBasicMaterial({ color: 0x552c1d, transparent: true, opacity: .13, depthWrite: false }));
         shadow.rotation.x = -Math.PI / 2;
-        shadow.position.y = -1.12 * scale;
-        root.add(shadow);
-        this.scene.add(root);
+        shadow.position.set(root.position.x, -1.12 * scale, root.position.z);
+        this.scene.add(root, shadow);
         const value = result?.results[slot]?.rolls[member];
         const target = finalRotation(model, value ?? (dice === 'dpercent' ? 10 : 1));
         model.group.quaternion.copy(target);
-        const item = { root, model, value, target, slot, member, base: root.position.clone() };
+        const item = { root, shadow, model, value, target, slot, member, base: root.position.clone() };
         this.items.push(item);
       }
       const chip = document.createElement('span');
@@ -196,22 +199,61 @@ export class DiceView {
 
   animate(dice, result) {
     this.show(dice, result.quantity, result.mode, null);
+    this.labels.replaceChildren();
     const token = this.token;
     this.items.forEach((item) => {
       const value = result.results[item.slot].rolls[item.member];
       item.target = finalRotation(item.model, value);
     });
     const startTime = performance.now();
+    let previousTime = startTime;
+    const physical = physicalDice.has(dice);
+    const bodies = physical ? this.items.map((item, index) => createPhysicalMotion({
+      baseX: item.base.x,
+      baseZ: item.base.z,
+      halfWidth: (this.camera.right - this.camera.left) / 2 - .25,
+      halfDepth: this.viewSpan / 2 - .35,
+      radius: item.model.group.scale.x * .82,
+      index,
+      total: this.items.length,
+    })) : [];
+    let landing = null;
     return new Promise((resolve) => {
       const frame = (now) => {
         if (token !== this.token) { resolve(false); return; }
         const progress = Math.min(1, (now - startTime) / ROLL_DURATION);
-        this.items.forEach((item, index) => {
+        if (physical && progress < PHYSICAL_PHASE) {
+          const delta = Math.min(.05, Math.max(0, (now - previousTime) / 1000));
+          const steps = Math.max(1, Math.ceil(delta / (1 / 90)));
+          for (let step = 0; step < steps; step++) {
+            bodies.forEach((body) => stepPhysicalMotion(body, delta / steps));
+            resolvePhysicalCollisions(bodies);
+          }
+          this.items.forEach((item, index) => {
+            const body = bodies[index];
+            item.root.position.set(body.x, body.y, body.z);
+            item.model.group.quaternion.setFromEuler(new THREE.Euler(body.ax, body.ay, body.az));
+          });
+        } else if (physical) {
+          if (!landing) landing = this.items.map((item) => ({ position: item.root.position.clone(), rotation: item.model.group.quaternion.clone() }));
+          const t = Math.min(1, (progress - PHYSICAL_PHASE) / (1 - PHYSICAL_PHASE));
+          const eased = t * t * (3 - 2 * t);
+          this.items.forEach((item, index) => {
+            item.root.position.copy(landing[index].position).lerp(item.base, eased);
+            item.model.group.quaternion.copy(landing[index].rotation).slerp(item.target, eased);
+          });
+        } else this.items.forEach((item, index) => {
           const movement = motionAt(progress, index);
           item.root.position.set(item.base.x + movement.x * item.model.group.scale.x, movement.y * item.model.group.scale.x, item.base.z + movement.z * item.model.group.scale.x);
           const spin = new THREE.Quaternion().setFromEuler(new THREE.Euler(movement.spin, movement.spin * .71, movement.spin * .38));
           item.model.group.quaternion.copy(item.target).multiply(spin);
         });
+        this.items.forEach((item) => {
+          item.shadow.position.x = item.root.position.x;
+          item.shadow.position.z = item.root.position.z;
+          item.shadow.material.opacity = .13 / (1 + item.root.position.y * .65);
+        });
+        previousTime = now;
         this.render();
         if (progress < 1) requestAnimationFrame(frame);
         else { this.show(dice, result.quantity, result.mode, result); resolve(true); }

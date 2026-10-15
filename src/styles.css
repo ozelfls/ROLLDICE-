@@ -91,6 +91,7 @@ body {
 }
 
 .action-button:not(:disabled):hover { transform: translateY(-2px); }
+.action-button:disabled { cursor: not-allowed; opacity: .5; }
 
 .history-item {
   display: flex;

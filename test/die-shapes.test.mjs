@@ -1,7 +1,7 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDieShape } from '../src/die-shapes.mjs';
-import { motionAt, ROLL_DURATION } from '../src/dice-motion.mjs';
+import { motionAt, createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, PHYSICAL_PHASE, ROLL_DURATION } from '../src/dice-motion.mjs';
 
 const counts = { d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, d20: 20, d100: 100, dpercent: 10 };
 const subtract = (a, b) => a.map((value, index) => value - b[index]);
@@ -47,4 +47,40 @@ test('movimento termina estável entre um e meio e dois e meio segundos', () => 
   assert.ok(ROLL_DURATION >= 1500 && ROLL_DURATION <= 2500);
   assert.deepEqual(motionAt(1, 0), { x: 0, y: 0, z: 0, spin: 0, settle: 1 });
   assert.ok(motionAt(.3, 0).spin > motionAt(.9, 0).spin);
+});
+
+test('lançamento físico percorre o painel, quica e permanece dentro das bordas', () => {
+  const options = { baseX: 0, baseZ: 0, halfWidth: 5.5, halfDepth: 1.8, radius: .9, index: 0, total: 1 };
+  const first = createPhysicalMotion(options, () => .4);
+  const second = createPhysicalMotion(options, () => .8);
+  assert.notEqual(first.x, second.x);
+  let minimumX = first.x;
+  let maximumX = first.x;
+  for (let step = 0; step < Math.round(ROLL_DURATION * PHYSICAL_PHASE / 1000 * 120); step++) {
+    stepPhysicalMotion(first, 1 / 120);
+    minimumX = Math.min(minimumX, first.x);
+    maximumX = Math.max(maximumX, first.x);
+    assert.ok(Math.abs(first.x) <= first.xLimit + 1e-8);
+    assert.ok(Math.abs(first.z) <= first.zLimit + 1e-8);
+    assert.ok(first.y >= 0);
+  }
+  assert.ok(maximumX - minimumX > 4);
+  assert.ok(first.floorHits >= 1);
+  assert.ok(first.wallHits >= 1);
+});
+
+test('dados próximos colidem e se separam', () => {
+  const options = { baseX: 0, baseZ: 0, halfWidth: 5, halfDepth: 2, radius: .7, index: 0, total: 2 };
+  const first = createPhysicalMotion(options, () => .4);
+  const second = createPhysicalMotion({ ...options, index: 1 }, () => .6);
+  first.x = 0;
+  second.x = .2;
+  first.z = second.z = 0;
+  first.y = second.y = 0;
+  first.vx = 2;
+  second.vx = -2;
+  resolvePhysicalCollisions([first, second]);
+  assert.ok(second.x - first.x >= (first.radius + second.radius) * .77 - 1e-8);
+  assert.ok(first.vx < 2);
+  assert.ok(second.vx > -2);
 });
