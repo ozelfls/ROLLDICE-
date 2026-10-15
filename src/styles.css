@@ -105,6 +105,14 @@ body {
 
 #result-value[data-critical='success'] { color: #07594d; }
 #result-value[data-critical='failure'] { color: #8e1a37; }
+#result-value[data-outcome='success'] { color: #07594d; }
+#result-value[data-outcome='failure'] { color: #8e1a37; }
+#result-value[data-phase='raw'], #result-value[data-phase='bonus'], #result-value[data-phase='final'] { animation: reveal-pop .28s ease-out; }
+
+@keyframes reveal-pop {
+  from { opacity: .25; transform: translateY(5px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 .dice-stage {
   height: 205px;

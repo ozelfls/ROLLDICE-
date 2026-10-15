@@ -25,7 +25,10 @@
         <div>
           <div class="flex items-center justify-between gap-2">
             <h2 id="result-heading" class="text-[11px] font-black uppercase tracking-[.16em] text-[#251916]/75">Resultado da rolagem</h2>
-            <span id="roll-badge" class="rounded-full bg-black/10 px-2.5 py-1 text-[10px] font-bold text-[#251916]">PRONTO PARA ROLAR</span>
+            <div class="flex items-center gap-1.5">
+              <button id="sound-button" type="button" aria-pressed="true" aria-label="Desativar som" class="rounded-full bg-black/10 px-2.5 py-1 text-[10px] font-bold text-[#251916]">Som ligado</button>
+              <span id="roll-badge" class="rounded-full bg-black/10 px-2.5 py-1 text-[10px] font-bold text-[#251916]">PRONTO PARA ROLAR</span>
+            </div>
           </div>
           <div id="dice-stage" class="dice-stage mt-3" aria-label="Visualização tridimensional dos dados"></div>
           <div id="dice-labels" class="dice-labels" aria-live="polite"></div>
@@ -66,6 +69,15 @@
             </div>
             <p class="mt-2 text-[11px] font-medium text-[var(--muted)]">De −100 a +100</p>
           </fieldset>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <label class="min-w-0 rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-3 text-xs font-black uppercase tracking-[.1em]" for="difficulty">CD opcional
+            <input id="difficulty" type="number" min="1" max="999" step="1" inputmode="numeric" placeholder="Sem CD" class="number-field mt-2" />
+          </label>
+          <label class="min-w-0 rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-3 text-xs font-black uppercase tracking-[.1em]" for="bonuses">Bônus extras
+            <input id="bonuses" type="text" inputmode="text" placeholder="+3, +2" aria-label="Até quatro bônus extras separados por vírgula" class="number-field mt-2 px-2 text-sm" />
+          </label>
         </div>
 
         <fieldset class="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-4">

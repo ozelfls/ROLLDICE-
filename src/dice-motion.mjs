@@ -1,4 +1,4 @@
-export const ROLL_DURATION = 2300;
+export const ROLL_DURATION = 1800;
 export const PHYSICAL_PHASE = 0.72;
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));

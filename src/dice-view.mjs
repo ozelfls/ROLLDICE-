@@ -98,6 +98,7 @@ export class DiceView {
     this.scene.add(rim);
     this.items = [];
     this.token = 0;
+    this.currentAnimation = null;
     this.viewSpan = 3.6;
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(stage);
@@ -132,6 +133,22 @@ export class DiceView {
     }
     this.items = [];
     this.labels.replaceChildren();
+  }
+
+  cancelAnimation() {
+    const current = this.currentAnimation;
+    this.currentAnimation = null;
+    this.clear();
+    current?.resolve(false);
+  }
+
+  skipAnimation() {
+    const current = this.currentAnimation;
+    if (!current) return false;
+    this.currentAnimation = null;
+    this.show(current.dice, current.result.quantity, current.result.mode, current.result);
+    current.resolve(true);
+    return true;
   }
 
   show(dice, quantity, mode, result = null) {
@@ -219,8 +236,16 @@ export class DiceView {
     })) : [];
     let landing = null;
     return new Promise((resolve) => {
+      const current = { dice, result, resolve };
+      this.currentAnimation = current;
       const frame = (now) => {
-        if (token !== this.token) { resolve(false); return; }
+        if (token !== this.token) {
+          if (this.currentAnimation === current) {
+            this.currentAnimation = null;
+            resolve(false);
+          }
+          return;
+        }
         const progress = Math.min(1, (now - startTime) / ROLL_DURATION);
         if (physical && progress < PHYSICAL_PHASE) {
           const delta = Math.min(.05, Math.max(0, (now - previousTime) / 1000));
@@ -256,7 +281,11 @@ export class DiceView {
         previousTime = now;
         this.render();
         if (progress < 1) requestAnimationFrame(frame);
-        else { this.show(dice, result.quantity, result.mode, result); resolve(true); }
+        else {
+          this.currentAnimation = null;
+          this.show(dice, result.quantity, result.mode, result);
+          resolve(true);
+        }
       };
       requestAnimationFrame(frame);
     });

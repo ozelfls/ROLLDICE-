@@ -23,9 +23,11 @@ O primeiro comando instala Electron, Three.js e as ferramentas de compilação. 
 - D20, D100 e D%: 1 dado por rolagem. Para D20, vantagem e desvantagem fazem duas jogadas do mesmo dado e escolhem o maior ou menor resultado.
 - D10 e D12: até 4 dados por rolagem.
 - D4, D6 e D8: até 12 dados por rolagem.
-- Modificador de −100 a +100.
+- Modificador de −100 a +100 e até quatro bônus extras entre −100 e +100, aplicados um por vez depois da revelação do dado.
+- CD opcional entre 1 e 999, com indicação de sucesso ou falha depois do cálculo; 1 e 20 naturais do D20 prevalecem sobre a CD.
+- Segundo clique em Rolar pula a animação e mostra o resultado final. O botão de som ativa ou desativa os sinais da revelação.
 - Modos normal, vantagem (maior de dois) e desvantagem (menor de dois).
-- Rerrolagem rápida com desvantagem, mantendo dado, quantidade e modificador da última jogada feita pelo botão Rolar.
+- Rerrolagem rápida com desvantagem, mantendo dado, quantidade, modificador, bônus e CD da última jogada feita pelo botão Rolar.
 - Sucesso e falha críticos em um único D20.
 - Soma de todos os dados selecionados antes de aplicar o modificador uma única vez, com valores individuais, subtotal e total.
 - Histórico recolhível da sessão, limpeza do histórico, reset do resultado e tema claro/escuro.

@@ -97,3 +97,26 @@ test('todos os dados e modos preservam seleção, quantidade e soma', () => {
     }
   }
 });
+
+test('bônus extras são aplicados em ordem e a CD avalia o total', () => {
+  const result = rollDice({ ...options, modifier: 3, bonuses: [2, -1], dc: 18 }, () => .65);
+  assert.equal(result.subtotal, 14);
+  assert.equal(result.total, 18);
+  assert.deepEqual(result.bonuses, [2, -1]);
+  assert.equal(result.outcome, 'success');
+  assert.match(result.display, /Bônus: \+2, -1 \| Total: 18 \| CD: 18 \| SUCESSO/);
+  assert.equal(rerollDice({ ...options, modifier: 3, bonuses: [2], dc: 19 }, sequence(.9, .6)).outcome, 'failure');
+});
+
+test('críticos do D20 prevalecem sobre a CD', () => {
+  assert.equal(rollDice({ ...options, modifier: 100, dc: 1 }, () => 0).outcome, 'failure');
+  assert.equal(rollDice({ ...options, modifier: -100, dc: 999 }, () => .999).outcome, 'success');
+  assert.equal(rollDice({ ...options, dice: 'd6', dc: 1 }, () => 0).outcome, 'success');
+  assert.equal(rollDice(options, () => .5).outcome, null);
+});
+
+test('CD e bônus extras rejeitam valores inválidos', () => {
+  for (const changed of [{ dc: 0 }, { dc: 1000 }, { dc: 1.5 }, { bonuses: [101] }, { bonuses: [-101] }, { bonuses: [1, 2, 3, 4, 5] }, { bonuses: '3' }]) {
+    assert.throws(() => rollDice({ ...options, ...changed }), RangeError);
+  }
+});

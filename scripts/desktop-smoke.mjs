@@ -75,11 +75,12 @@ try {
     return response.result.value;
   };
   const waitFor = async (expression) => {
-    for (let attempt = 0; attempt < 60; attempt++) {
+    for (let attempt = 0; attempt < 150; attempt++) {
       if (await evaluate(expression)) return;
       await delay(100);
     }
-    throw new Error(`A interface não terminou: ${expression}`);
+    const status = await evaluate('({ badge: document.querySelector("#roll-badge").textContent, error: document.querySelector("#form-error").textContent, history: document.querySelectorAll("#history-list li").length, button: document.querySelector("#roll-form button[type=submit]").textContent })');
+    throw new Error(`A interface não terminou: ${expression} ${JSON.stringify(status)}`);
   };
   const folder = await mkdtemp(path.join(os.tmpdir(), 'dado-rpg-'));
 
@@ -91,6 +92,7 @@ try {
   assert.equal(await evaluate('document.querySelector("#modifier").max'), '100');
   assert.equal(await evaluate('document.querySelector("#quantity").max'), '1');
   assert.equal(await evaluate('document.querySelector("#quantity").readOnly'), true);
+  assert.equal(await evaluate('document.querySelector("#sound-button").getAttribute("aria-pressed")'), 'true');
   assert.ok(await evaluate('document.querySelector("#reset-button").getBoundingClientRect().right <= window.innerWidth - 4'), 'A barra de ações ultrapassou a janela.');
   assert.ok(await evaluate('document.documentElement.scrollHeight <= window.innerHeight + 400'), 'A tela inicial ficou alta demais.');
   assert.equal(await evaluate('document.querySelector("#history-panel").open'), false);
@@ -109,11 +111,16 @@ try {
   await evaluate('document.querySelector("#mode-grid [data-value=vantagem]").click()');
   await evaluate('document.querySelector("#quantity").value = "2"');
   await evaluate('document.querySelector("#modifier").value = "3"');
+  await evaluate('document.querySelector("#bonuses").value = "+2"');
+  await evaluate('document.querySelector("#difficulty").value = "1"');
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
-  assert.equal(await evaluate('document.querySelector("#roll-form button[type=submit]").disabled'), true);
+  assert.ok(await evaluate('document.querySelector("#roll-form button[type=submit]").textContent.includes("Pular")'));
+  await waitFor('document.querySelector("#roll-badge").textContent === "VALOR BRUTO"');
+  await waitFor('document.querySelector("#roll-badge").textContent.includes("BÔNUS 1/")');
   await waitFor('document.querySelectorAll("#history-list li").length === 1');
   assert.equal(await evaluate('document.querySelector("#reroll-button").disabled'), false);
   assert.ok(await evaluate('document.querySelector("#result-value").textContent.includes("Total:")'));
+  assert.ok(await evaluate('document.querySelector("#result-meta").textContent.includes("CD: 1")'));
   await evaluate('document.querySelector("#reroll-button").click()');
   await waitFor('document.querySelectorAll("#history-list li").length === 2');
   assert.ok(await evaluate('document.querySelector("#result-meta").textContent.includes("rerrolagem")'));
@@ -144,7 +151,7 @@ try {
   assert.equal(await evaluate('document.querySelectorAll("#dice-stage canvas").length'), 1);
   await evaluate('document.querySelector("#mode-grid [data-value=normal]").click()');
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
-  assert.equal(await evaluate('document.querySelector("#roll-form button[type=submit]").disabled'), true);
+  assert.ok(await evaluate('document.querySelector("#roll-form button[type=submit]").textContent.includes("Pular")'));
   await delay(650);
   assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), 0);
   assert.ok(await evaluate('document.querySelector("#result-meta").textContent.includes("lançamento em andamento")'));
@@ -162,10 +169,17 @@ try {
   const image = path.join(folder, 'desktop-smoke.png');
   await writeFile(image, Buffer.from(screenshot.data, 'base64'));
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
-  assert.equal(await evaluate('document.querySelector("#roll-form button[type=submit]").disabled'), true);
+  assert.ok(await evaluate('document.querySelector("#roll-form button[type=submit]").textContent.includes("Pular")'));
+  await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
+  await waitFor('document.querySelectorAll("#history-list li").length === 13');
+  assert.ok(await evaluate('document.querySelector("#result-value").textContent.includes("Total:")'));
+  await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
+  assert.ok(await evaluate('document.querySelector("#roll-form button[type=submit]").textContent.includes("Pular")'));
   await evaluate('document.querySelector("#reset-button").click()');
-  await waitFor('document.querySelector("#roll-form button[type=submit]").disabled === false');
-  assert.equal(await evaluate('document.querySelectorAll("#history-list li").length'), 12);
+  await waitFor('document.querySelector("#roll-form button[type=submit]").textContent.includes("Rolar")');
+  assert.equal(await evaluate('document.querySelectorAll("#history-list li").length'), 13);
+  await evaluate('document.querySelector("#sound-button").click()');
+  assert.equal(await evaluate('document.querySelector("#sound-button").getAttribute("aria-pressed")'), 'false');
   await evaluate('document.querySelector("#theme-button").click()');
   assert.equal(await evaluate('document.documentElement.dataset.theme'), 'light');
   await evaluate('document.querySelector("#reset-button").click()');

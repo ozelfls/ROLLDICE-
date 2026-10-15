@@ -30,7 +30,7 @@ function randomFace(sides, random) {
   return Math.floor(value * sides) + 1;
 }
 
-export function validateOptions({ dice, quantity, modifier, mode }) {
+export function validateOptions({ dice, quantity, modifier, mode, bonuses = [], dc = null }) {
   if (!Object.hasOwn(DICE, dice)) throw new RangeError('Tipo de dado inválido.');
   const maximum = MAX_QUANTITY[dice];
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > maximum) {
@@ -41,11 +41,17 @@ export function validateOptions({ dice, quantity, modifier, mode }) {
     throw new RangeError('O modificador deve estar entre -100 e 100.');
   }
   if (!MODES.includes(mode)) throw new RangeError('Modo de rolagem inválido.');
+  if (!Array.isArray(bonuses) || bonuses.length > 4 || bonuses.some((bonus) => !Number.isInteger(bonus) || bonus < -100 || bonus > 100)) {
+    throw new RangeError('Informe até 4 bônus entre -100 e +100.');
+  }
+  if (dc !== null && (!Number.isInteger(dc) || dc < 1 || dc > 999)) {
+    throw new RangeError('A CD deve estar entre 1 e 999.');
+  }
 }
 
 export function rollDice(options, random = Math.random) {
   validateOptions(options);
-  const { dice, quantity, modifier, mode } = options;
+  const { dice, quantity, modifier, mode, bonuses = [], dc = null } = options;
   const percent = dice === 'dpercent';
   const suffix = percent ? '%' : '';
   const results = Array.from({ length: quantity }, () => {
@@ -63,16 +69,22 @@ export function rollDice(options, random = Math.random) {
   const criticalText = critical === 'success' ? ' - 🗿 SUCESSO CRÍTICO!'
     : critical === 'failure' ? ' - 💀 FALHA CRÍTICA!' : '';
   const subtotal = results.reduce((sum, result) => sum + result.selected, 0);
-  const total = subtotal + modifier;
+  const total = subtotal + modifier + bonuses.reduce((sum, bonus) => sum + bonus, 0);
+  const outcome = dc === null ? null : critical === 'success' ? 'success' : critical === 'failure' ? 'failure' : total >= dc ? 'success' : 'failure';
   const label = percent ? 'D%' : dice.toUpperCase();
   const rollLabel = quantity === 1 ? label : `${quantity}${label}`;
   const individual = results.map((result) => result.text).join(' + ');
-  const display = `${rollLabel}: ${individual} | Subtotal: ${subtotal}${suffix} | Modificador: ${modifier >= 0 ? '+' : ''}${modifier} | Total: ${total}${suffix}${criticalText}`;
+  const bonusText = bonuses.length ? ` | Bônus: ${bonuses.map((bonus) => `${bonus >= 0 ? '+' : ''}${bonus}`).join(', ')}` : '';
+  const outcomeText = dc === null ? '' : ` | CD: ${dc} | ${outcome === 'success' ? 'SUCESSO' : 'FALHA'}`;
+  const display = `${rollLabel}: ${individual} | Subtotal: ${subtotal}${suffix} | Modificador: ${modifier >= 0 ? '+' : ''}${modifier}${bonusText} | Total: ${total}${suffix}${outcomeText}${criticalText}`;
 
   return {
     dice,
     quantity,
     modifier,
+    bonuses: [...bonuses],
+    dc,
+    outcome,
     mode,
     results,
     subtotal,

@@ -8,6 +8,9 @@ const quantityHelp = document.querySelector('#quantity-help');
 const quantityMinus = document.querySelector('#quantity-minus');
 const quantityPlus = document.querySelector('#quantity-plus');
 const modifierInput = document.querySelector('#modifier');
+const difficultyInput = document.querySelector('#difficulty');
+const bonusesInput = document.querySelector('#bonuses');
+const soundButton = document.querySelector('#sound-button');
 const resultValue = document.querySelector('#result-value');
 const resultMeta = document.querySelector('#result-meta');
 const rollBadge = document.querySelector('#roll-badge');
@@ -29,7 +32,41 @@ const state = {
   light: false,
   rolling: false,
   previewPending: false,
+  sequence: null,
+  sound: true,
 };
+
+let audioContext;
+
+function tone(frequency, duration, delay = 0, volume = .05) {
+  if (!state.sound) return;
+  try {
+    audioContext ??= new AudioContext();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const start = audioContext.currentTime + delay;
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(volume, start + .02);
+    gain.gain.exponentialRampToValueAtTime(.001, start + duration);
+    oscillator.connect(gain).connect(audioContext.destination);
+    oscillator.start(start);
+    oscillator.stop(start + duration);
+  } catch {}
+}
+
+function playOutcomeSound(result) {
+  if (result.outcome === 'failure' || result.critical === 'failure') {
+    tone(310, .2);
+    tone(220, .32, .13);
+  } else if (result.outcome === 'success' || result.critical === 'success') {
+    tone(520, .22);
+    tone(780, .36, .13);
+  } else tone(620, .23);
+}
+
+const signed = (value) => `${value >= 0 ? '+' : ''}${value}`;
 
 const modes = [
   { value: 'normal', label: 'Normal', help: 'Um lançamento por dado.' },
@@ -143,11 +180,21 @@ function readOptions() {
   if (quantityInput.value.trim() === '' || modifierInput.value.trim() === '') {
     throw new RangeError('Preencha a quantidade e o modificador.');
   }
+  const bonusText = bonusesInput.value.trim();
+  const bonusParts = bonusText ? bonusText.split(/[,;\s]+/).filter(Boolean) : [];
+  if (bonusParts.some((part) => !/^[+-]?\d+$/.test(part))) {
+    throw new RangeError('Separe os bônus com vírgulas, por exemplo +3, +2.');
+  }
+  if (difficultyInput.value.trim() && !/^\d+$/.test(difficultyInput.value.trim())) {
+    throw new RangeError('A CD deve estar entre 1 e 999.');
+  }
   return {
     dice: state.dice,
     mode: state.mode,
     quantity: Number(quantityInput.value),
     modifier: Number(modifierInput.value),
+    bonuses: bonusParts.map(Number),
+    dc: difficultyInput.value.trim() ? Number(difficultyInput.value) : null,
   };
 }
 
@@ -162,10 +209,14 @@ function renderResult(result, rerolled = false) {
     ? `${result.quantity}${label} · Total: ${result.total}${percent}`
     : `${result.quantity > 1 ? result.quantity : ''}${label}: ${result.individual} · Total: ${result.total}${percent}`;
   resultValue.dataset.critical = result.critical || '';
+  resultValue.dataset.phase = 'final';
+  resultValue.dataset.outcome = result.outcome || '';
   rollBadge.textContent = result.critical === 'success' ? 'SUCESSO CRÍTICO'
     : result.critical === 'failure' ? 'FALHA CRÍTICA'
+    : result.outcome === 'success' ? 'SUCESSO'
+    : result.outcome === 'failure' ? 'FALHA'
     : rerolled ? 'RERROLAGEM' : 'ROLAGEM';
-  resultMeta.textContent = `${result.quantity > 4 ? `Dados: ${result.results.map((item) => item.selected).join(' + ')} · ` : ''}Subtotal: ${result.subtotal}${percent} · Modificador: ${result.modifier >= 0 ? '+' : ''}${result.modifier} · ${result.mode}${rerolled ? ' · rerrolagem' : ''}`;
+  resultMeta.textContent = `${result.quantity > 4 ? `Dados: ${result.results.map((item) => item.selected).join(' + ')} · ` : ''}Subtotal: ${result.subtotal}${percent} · Modificador: ${signed(result.modifier)}${result.bonuses.length ? ` · Bônus: ${result.bonuses.map(signed).join(', ')}` : ''}${result.dc === null ? '' : ` · CD: ${result.dc}`} · ${result.mode}${rerolled ? ' · rerrolagem' : ''}`;
 }
 
 function renderHistory() {
@@ -196,19 +247,94 @@ function record(result, rerolled = false) {
   renderHistory();
 }
 
+function waitStep(sequence, duration) {
+  if (sequence.skipped || sequence.cancelled) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      sequence.wake = null;
+      resolve();
+    }, duration);
+    sequence.wake = () => {
+      clearTimeout(timer);
+      sequence.wake = null;
+      resolve();
+    };
+  });
+}
+
+function skipSequence() {
+  const sequence = state.sequence;
+  if (!sequence) return;
+  sequence.skipped = true;
+  view.skipAnimation();
+  sequence.wake?.();
+}
+
+function cancelSequence() {
+  const sequence = state.sequence;
+  if (!sequence) return;
+  sequence.cancelled = true;
+  view.cancelAnimation();
+  sequence.wake?.();
+  state.sequence = null;
+  state.rolling = false;
+  rollButton.textContent = '🎲 Rolar';
+  rerollButton.disabled = true;
+}
+
+function revealRaw(result) {
+  const label = result.dice === 'dpercent' ? 'D%' : result.dice.toUpperCase();
+  const suffix = result.dice === 'dpercent' ? '%' : '';
+  resultValue.textContent = `${result.quantity > 1 ? result.quantity : ''}${label}: ${result.results.map((item) => `${item.selected}${suffix}`).join(' + ')} · ${result.subtotal}${suffix}`;
+  resultValue.dataset.phase = 'raw';
+  rollBadge.textContent = 'VALOR BRUTO';
+  resultMeta.textContent = result.dc === null ? 'Resultado do dado, antes dos modificadores.' : `Resultado do dado · CD ${result.dc}`;
+  tone(460, .14, 0, .026);
+}
+
+function revealBonus(value, running, index, count, result) {
+  rollBadge.textContent = `BÔNUS ${index + 1}/${count}`;
+  resultValue.textContent = `${running - value} ${signed(value)} = ${running}`;
+  resultValue.dataset.phase = 'bonus';
+  resultValue.animate([{ opacity: .3, transform: 'translateY(5px) scale(.98)' }, { opacity: 1, transform: 'translateY(0) scale(1)' }], { duration: 280, easing: 'ease-out' });
+  resultMeta.textContent = `${result.individual} · ${index + 1} de ${count} modificadores${result.dc === null ? '' : ` · CD ${result.dc}`}`;
+  tone(value >= 0 ? 590 + index * 80 : 350 - index * 40, .17, 0, .025);
+}
+
 async function play(result, rerolled = false) {
+  const sequence = { skipped: false, cancelled: false, wake: null };
+  state.sequence = sequence;
   state.rolling = true;
-  rollButton.disabled = true;
+  rollButton.textContent = 'Pular animação';
   rerollButton.disabled = true;
   rollBadge.textContent = 'ROLANDO...';
   resultValue.textContent = 'Os dados estão rolando...';
-  resultMeta.textContent = `${result.dice === 'dpercent' ? 'D%' : result.dice.toUpperCase()} · lançamento em andamento`;
+  resultValue.dataset.phase = 'rolling';
+  resultValue.dataset.critical = '';
+  resultValue.dataset.outcome = '';
+  resultMeta.textContent = `${result.dice === 'dpercent' ? 'D%' : result.dice.toUpperCase()} · lançamento em andamento${result.dc === null ? '' : ` · CD ${result.dc}`}`;
   try {
     const completed = await view.animate(result.dice, result);
-    if (completed) record(result, rerolled);
+    if (!completed || sequence.cancelled) return;
+    if (!sequence.skipped) {
+      revealRaw(result);
+      await waitStep(sequence, 300);
+    }
+    let running = result.subtotal;
+    const bonuses = [result.modifier, ...result.bonuses].filter((value) => value !== 0);
+    for (let index = 0; index < bonuses.length && !sequence.skipped && !sequence.cancelled; index++) {
+      running += bonuses[index];
+      revealBonus(bonuses[index], running, index, bonuses.length, result);
+      await waitStep(sequence, 340);
+    }
+    if (sequence.cancelled) return;
+    record(result, rerolled);
+    playOutcomeSound(result);
   } finally {
+    if (state.sequence !== sequence) return;
+    state.sequence = null;
     state.rolling = false;
-    rollButton.disabled = false;
+    rollButton.textContent = '🎲 Rolar';
     rerollButton.disabled = !state.previous;
     if (state.previewPending) preview();
     state.previewPending = false;
@@ -217,7 +343,7 @@ async function play(result, rerolled = false) {
 
 document.querySelector('#roll-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (state.rolling) return;
+  if (state.rolling) { skipSequence(); return; }
   hideError();
   try {
     const result = rollDice(readOptions());
@@ -226,6 +352,8 @@ document.querySelector('#roll-form').addEventListener('submit', async (event) =>
       quantity: result.quantity,
       modifier: result.modifier,
       mode: result.mode,
+      bonuses: result.bonuses,
+      dc: result.dc,
     };
     await play(result);
   } catch (error) {
@@ -245,15 +373,24 @@ rerollButton.addEventListener('click', async () => {
 });
 
 document.querySelector('#reset-button').addEventListener('click', () => {
-  if (state.rolling) view.clear();
+  if (state.rolling) cancelSequence();
   resultValue.textContent = 'Selecione um dado e clique em Rolar!';
   resultValue.dataset.critical = '';
+  resultValue.dataset.outcome = '';
+  resultValue.dataset.phase = 'ready';
   resultMeta.textContent = 'Escolha seu dado, modo e modificador abaixo.';
   rollBadge.textContent = 'PRONTO PARA ROLAR';
   state.previous = null;
   rerollButton.disabled = true;
   hideError();
   preview();
+});
+
+soundButton.addEventListener('click', () => {
+  state.sound = !state.sound;
+  soundButton.textContent = state.sound ? 'Som ligado' : 'Som desligado';
+  soundButton.setAttribute('aria-pressed', String(state.sound));
+  soundButton.setAttribute('aria-label', state.sound ? 'Desativar som' : 'Ativar som');
 });
 
 clearHistoryButton.addEventListener('click', () => {
