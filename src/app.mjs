@@ -10,7 +10,6 @@ const quantityPlus = document.querySelector('#quantity-plus');
 const modifierInput = document.querySelector('#modifier');
 const difficultyInput = document.querySelector('#difficulty');
 const bonusesInput = document.querySelector('#bonuses');
-const soundButton = document.querySelector('#sound-button');
 const resultValue = document.querySelector('#result-value');
 const resultMeta = document.querySelector('#result-meta');
 const rollBadge = document.querySelector('#roll-badge');
@@ -33,38 +32,7 @@ const state = {
   rolling: false,
   previewPending: false,
   sequence: null,
-  sound: true,
 };
-
-let audioContext;
-
-function tone(frequency, duration, delay = 0, volume = .05) {
-  if (!state.sound) return;
-  try {
-    audioContext ??= new AudioContext();
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    const start = audioContext.currentTime + delay;
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(frequency, start);
-    gain.gain.setValueAtTime(0, start);
-    gain.gain.linearRampToValueAtTime(volume, start + .02);
-    gain.gain.exponentialRampToValueAtTime(.001, start + duration);
-    oscillator.connect(gain).connect(audioContext.destination);
-    oscillator.start(start);
-    oscillator.stop(start + duration);
-  } catch {}
-}
-
-function playOutcomeSound(result) {
-  if (result.outcome === 'failure' || result.critical === 'failure') {
-    tone(310, .2);
-    tone(220, .32, .13);
-  } else if (result.outcome === 'success' || result.critical === 'success') {
-    tone(520, .22);
-    tone(780, .36, .13);
-  } else tone(620, .23);
-}
 
 const signed = (value) => `${value >= 0 ? '+' : ''}${value}`;
 
@@ -289,7 +257,6 @@ function revealRaw(result) {
   resultValue.dataset.phase = 'raw';
   rollBadge.textContent = 'VALOR BRUTO';
   resultMeta.textContent = result.dc === null ? 'Resultado do dado, antes dos modificadores.' : `Resultado do dado · CD ${result.dc}`;
-  tone(460, .14, 0, .026);
 }
 
 function revealBonus(value, running, index, count, result) {
@@ -298,7 +265,6 @@ function revealBonus(value, running, index, count, result) {
   resultValue.dataset.phase = 'bonus';
   resultValue.animate([{ opacity: .3, transform: 'translateY(5px) scale(.98)' }, { opacity: 1, transform: 'translateY(0) scale(1)' }], { duration: 280, easing: 'ease-out' });
   resultMeta.textContent = `${result.individual} · ${index + 1} de ${count} modificadores${result.dc === null ? '' : ` · CD ${result.dc}`}`;
-  tone(value >= 0 ? 590 + index * 80 : 350 - index * 40, .17, 0, .025);
 }
 
 async function play(result, rerolled = false) {
@@ -329,7 +295,6 @@ async function play(result, rerolled = false) {
     }
     if (sequence.cancelled) return;
     record(result, rerolled);
-    playOutcomeSound(result);
   } finally {
     if (state.sequence !== sequence) return;
     state.sequence = null;
@@ -384,13 +349,6 @@ document.querySelector('#reset-button').addEventListener('click', () => {
   rerollButton.disabled = true;
   hideError();
   preview();
-});
-
-soundButton.addEventListener('click', () => {
-  state.sound = !state.sound;
-  soundButton.textContent = state.sound ? 'Som ligado' : 'Som desligado';
-  soundButton.setAttribute('aria-pressed', String(state.sound));
-  soundButton.setAttribute('aria-label', state.sound ? 'Desativar som' : 'Ativar som');
 });
 
 clearHistoryButton.addEventListener('click', () => {

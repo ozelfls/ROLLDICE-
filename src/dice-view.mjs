@@ -1,11 +1,10 @@
 import * as THREE from 'three';
 import { createDieShape } from './die-shapes.mjs';
-import { motionAt, createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, PHYSICAL_PHASE, ROLL_DURATION } from './dice-motion.mjs';
+import { createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, settlePhysicalMotion, PHYSICAL_PHASE, ROLL_DURATION } from './dice-motion.mjs';
 
 const palette = [0xffe5b0, 0xffd489, 0xf9c774, 0xffe9bf];
 const labelCache = new Map();
 const shapeCache = new Map();
-const physicalDice = new Set(['d4', 'd6', 'd8', 'd20']);
 
 function labelTexture(value) {
   const key = String(value);
@@ -36,6 +35,7 @@ function makeDie(dice) {
   const shape = modelFor(dice);
   const group = new THREE.Group();
   const faceFrames = new Map();
+  const numberMeshes = [];
   shape.faces.forEach((face, index) => {
     const points = face.vertices.map((vertex) => new THREE.Vector3(...shape.vertices[vertex]));
     const center = points.reduce((sum, point) => sum.add(point), new THREE.Vector3()).multiplyScalar(1 / points.length);
@@ -63,8 +63,9 @@ function makeDie(dice) {
     label.position.copy(center).addScaledVector(normal, .018);
     label.quaternion.copy(localFrame);
     group.add(label);
+    numberMeshes.push(label);
   });
-  return { group, faceFrames };
+  return { group, faceFrames, numberMeshes };
 }
 
 function finalRotation(model, value) {
@@ -145,13 +146,14 @@ export class DiceView {
   skipAnimation() {
     const current = this.currentAnimation;
     if (!current) return false;
+    const positions = this.items.map((item) => ({ x: item.root.position.x, z: item.root.position.z }));
     this.currentAnimation = null;
-    this.show(current.dice, current.result.quantity, current.result.mode, current.result);
+    this.show(current.dice, current.result.quantity, current.result.mode, current.result, positions);
     current.resolve(true);
     return true;
   }
 
-  show(dice, quantity, mode, result = null) {
+  show(dice, quantity, mode, result = null, positions = null) {
     this.clear();
     const pair = mode !== 'normal';
     const columns = quantity === 1 ? 1 : Math.ceil(Math.sqrt(quantity * 1.6));
@@ -176,7 +178,8 @@ export class DiceView {
       for (let member = 0; member < (pair ? 2 : 1); member++) {
         const model = makeDie(dice);
         const root = new THREE.Group();
-        root.position.set(centerX + (pair ? (member - .5) * scale * (dice === 'd100' ? 2.1 : 1.75) : 0), 0, centerZ);
+        const placement = positions?.[this.items.length];
+        root.position.set(placement?.x ?? centerX + (pair ? (member - .5) * scale * (dice === 'd100' ? 2.1 : 1.75) : 0), 0, placement?.z ?? centerZ);
         model.group.scale.setScalar(scale);
         root.add(model.group);
         const shadow = new THREE.Mesh(new THREE.CircleGeometry(scale * 1.05, 32), new THREE.MeshBasicMaterial({ color: 0x552c1d, transparent: true, opacity: .13, depthWrite: false }));
@@ -221,11 +224,11 @@ export class DiceView {
     this.items.forEach((item) => {
       const value = result.results[item.slot].rolls[item.member];
       item.target = finalRotation(item.model, value);
+      item.model.numberMeshes.forEach((number) => { number.visible = false; });
     });
     const startTime = performance.now();
     let previousTime = startTime;
-    const physical = physicalDice.has(dice);
-    const bodies = physical ? this.items.map((item, index) => createPhysicalMotion({
+    const bodies = this.items.map((item, index) => createPhysicalMotion({
       baseX: item.base.x,
       baseZ: item.base.z,
       halfWidth: (this.camera.right - this.camera.left) / 2 - .25,
@@ -233,7 +236,7 @@ export class DiceView {
       radius: item.model.group.scale.x * .82,
       index,
       total: this.items.length,
-    })) : [];
+    }));
     let landing = null;
     return new Promise((resolve) => {
       const current = { dice, result, resolve };
@@ -247,7 +250,7 @@ export class DiceView {
           return;
         }
         const progress = Math.min(1, (now - startTime) / ROLL_DURATION);
-        if (physical && progress < PHYSICAL_PHASE) {
+        if (progress < PHYSICAL_PHASE) {
           const delta = Math.min(.05, Math.max(0, (now - previousTime) / 1000));
           const steps = Math.max(1, Math.ceil(delta / (1 / 90)));
           for (let step = 0; step < steps; step++) {
@@ -259,20 +262,15 @@ export class DiceView {
             item.root.position.set(body.x, body.y, body.z);
             item.model.group.quaternion.setFromEuler(new THREE.Euler(body.ax, body.ay, body.az));
           });
-        } else if (physical) {
-          if (!landing) landing = this.items.map((item) => ({ position: item.root.position.clone(), rotation: item.model.group.quaternion.clone() }));
+        } else {
+          if (!landing) landing = this.items.map((item, index) => ({ body: { ...bodies[index] }, rotation: item.model.group.quaternion.clone() }));
           const t = Math.min(1, (progress - PHYSICAL_PHASE) / (1 - PHYSICAL_PHASE));
-          const eased = t * t * (3 - 2 * t);
           this.items.forEach((item, index) => {
-            item.root.position.copy(landing[index].position).lerp(item.base, eased);
-            item.model.group.quaternion.copy(landing[index].rotation).slerp(item.target, eased);
+            const motion = settlePhysicalMotion(landing[index].body, t);
+            item.root.position.set(motion.x, motion.y, motion.z);
+            item.model.group.quaternion.copy(landing[index].rotation).slerp(item.target, motion.rotation);
           });
-        } else this.items.forEach((item, index) => {
-          const movement = motionAt(progress, index);
-          item.root.position.set(item.base.x + movement.x * item.model.group.scale.x, movement.y * item.model.group.scale.x, item.base.z + movement.z * item.model.group.scale.x);
-          const spin = new THREE.Quaternion().setFromEuler(new THREE.Euler(movement.spin, movement.spin * .71, movement.spin * .38));
-          item.model.group.quaternion.copy(item.target).multiply(spin);
-        });
+        }
         this.items.forEach((item) => {
           item.shadow.position.x = item.root.position.x;
           item.shadow.position.z = item.root.position.z;
@@ -282,8 +280,9 @@ export class DiceView {
         this.render();
         if (progress < 1) requestAnimationFrame(frame);
         else {
+          const positions = this.items.map((item) => ({ x: item.root.position.x, z: item.root.position.z }));
           this.currentAnimation = null;
-          this.show(dice, result.quantity, result.mode, result);
+          this.show(dice, result.quantity, result.mode, result, positions);
           resolve(true);
         }
       };

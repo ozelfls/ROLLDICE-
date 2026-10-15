@@ -92,7 +92,6 @@ try {
   assert.equal(await evaluate('document.querySelector("#modifier").max'), '100');
   assert.equal(await evaluate('document.querySelector("#quantity").max'), '1');
   assert.equal(await evaluate('document.querySelector("#quantity").readOnly'), true);
-  assert.equal(await evaluate('document.querySelector("#sound-button").getAttribute("aria-pressed")'), 'true');
   assert.ok(await evaluate('document.querySelector("#reset-button").getBoundingClientRect().right <= window.innerWidth - 4'), 'A barra de ações ultrapassou a janela.');
   assert.ok(await evaluate('document.documentElement.scrollHeight <= window.innerHeight + 400'), 'A tela inicial ficou alta demais.');
   assert.equal(await evaluate('document.querySelector("#history-panel").open'), false);
@@ -178,8 +177,6 @@ try {
   await evaluate('document.querySelector("#reset-button").click()');
   await waitFor('document.querySelector("#roll-form button[type=submit]").textContent.includes("Rolar")');
   assert.equal(await evaluate('document.querySelectorAll("#history-list li").length'), 13);
-  await evaluate('document.querySelector("#sound-button").click()');
-  assert.equal(await evaluate('document.querySelector("#sound-button").getAttribute("aria-pressed")'), 'false');
   await evaluate('document.querySelector("#theme-button").click()');
   assert.equal(await evaluate('document.documentElement.dataset.theme'), 'light');
   await evaluate('document.querySelector("#reset-button").click()');

@@ -1,4 +1,4 @@
-export const ROLL_DURATION = 1800;
+export const ROLL_DURATION = 1950;
 export const PHYSICAL_PHASE = 0.72;
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
@@ -109,17 +109,14 @@ export function resolvePhysicalCollisions(bodies) {
   }
 }
 
-export function motionAt(progress, index) {
-  const t = Math.max(0, Math.min(1, progress));
-  if (t === 1) return { x: 0, y: 0, z: 0, spin: 0, settle: 1 };
-  const settle = 1 - Math.pow(1 - t, 3);
-  const energy = Math.pow(1 - t, 2);
-  const bounce = Math.abs(Math.sin((t * 3.4 + index * .13) * Math.PI)) * energy;
+export function settlePhysicalMotion(body, progress) {
+  const t = clamp(progress, 0, 1);
+  const travel = 1 - Math.pow(1 - t, 3);
+  const rotation = t * t * (3 - 2 * t);
   return {
-    x: Math.sin(t * Math.PI * 2.3 + index * 1.7) * energy * .65,
-    y: bounce * 1.05 + Math.sin(t * Math.PI) * .22,
-    z: Math.cos(t * Math.PI * 1.7 + index * 2.1) * energy * .4,
-    spin: (1 - settle) * (Math.PI * (5 + index % 4)),
-    settle,
+    x: clamp(body.x + body.vx * .12 * travel, -body.xLimit, body.xLimit),
+    y: body.y * (1 - travel),
+    z: clamp(body.z + body.vz * .12 * travel, -body.zLimit, body.zLimit),
+    rotation,
   };
 }
