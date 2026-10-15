@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createDieShape } from './die-shapes.mjs';
-import { createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, settlePhysicalMotion, PHYSICAL_PHASE, ROLL_DURATION } from './dice-motion.mjs';
+import { createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, settlePhysicalMotion, createSpinProfile, spinAt, PHYSICAL_PHASE, ROLL_DURATION } from './dice-motion.mjs';
 
 const palette = [0xffe5b0, 0xffd489, 0xf9c774, 0xffe9bf];
 const labelCache = new Map();
@@ -35,7 +35,6 @@ function makeDie(dice) {
   const shape = modelFor(dice);
   const group = new THREE.Group();
   const faceFrames = new Map();
-  const numberMeshes = [];
   shape.faces.forEach((face, index) => {
     const points = face.vertices.map((vertex) => new THREE.Vector3(...shape.vertices[vertex]));
     const center = points.reduce((sum, point) => sum.add(point), new THREE.Vector3()).multiplyScalar(1 / points.length);
@@ -63,9 +62,8 @@ function makeDie(dice) {
     label.position.copy(center).addScaledVector(normal, .018);
     label.quaternion.copy(localFrame);
     group.add(label);
-    numberMeshes.push(label);
   });
-  return { group, faceFrames, numberMeshes };
+  return { group, faceFrames };
 }
 
 function finalRotation(model, value) {
@@ -122,6 +120,7 @@ export class DiceView {
 
   clear() {
     this.token++;
+    this.renderer.domElement.style.filter = '';
     for (const item of this.items) {
       this.scene.remove(item.root);
       this.scene.remove(item.shadow);
@@ -224,7 +223,6 @@ export class DiceView {
     this.items.forEach((item) => {
       const value = result.results[item.slot].rolls[item.member];
       item.target = finalRotation(item.model, value);
-      item.model.numberMeshes.forEach((number) => { number.visible = false; });
     });
     const startTime = performance.now();
     let previousTime = startTime;
@@ -237,6 +235,9 @@ export class DiceView {
       index,
       total: this.items.length,
     }));
+    const spins = this.items.map(() => createSpinProfile());
+    const spinEuler = new THREE.Euler();
+    const spinQuaternion = new THREE.Quaternion();
     let landing = null;
     return new Promise((resolve) => {
       const current = { dice, result, resolve };
@@ -260,17 +261,23 @@ export class DiceView {
           this.items.forEach((item, index) => {
             const body = bodies[index];
             item.root.position.set(body.x, body.y, body.z);
-            item.model.group.quaternion.setFromEuler(new THREE.Euler(body.ax, body.ay, body.az));
           });
         } else {
-          if (!landing) landing = this.items.map((item, index) => ({ body: { ...bodies[index] }, rotation: item.model.group.quaternion.clone() }));
+          if (!landing) landing = bodies.map((body) => ({ ...body }));
           const t = Math.min(1, (progress - PHYSICAL_PHASE) / (1 - PHYSICAL_PHASE));
           this.items.forEach((item, index) => {
-            const motion = settlePhysicalMotion(landing[index].body, t);
+            const motion = settlePhysicalMotion(landing[index], t);
             item.root.position.set(motion.x, motion.y, motion.z);
-            item.model.group.quaternion.copy(landing[index].rotation).slerp(item.target, motion.rotation);
           });
         }
+        this.items.forEach((item, index) => {
+          const spin = spinAt(progress, spins[index]);
+          spinEuler.set(spin.x, spin.y, spin.z);
+          spinQuaternion.setFromEuler(spinEuler);
+          item.model.group.quaternion.copy(item.target).multiply(spinQuaternion);
+        });
+        const blur = spinAt(progress, spins[0]).blur;
+        this.renderer.domElement.style.filter = blur > .04 ? `blur(${blur.toFixed(2)}px)` : '';
         this.items.forEach((item) => {
           item.shadow.position.x = item.root.position.x;
           item.shadow.position.z = item.root.position.z;

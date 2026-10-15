@@ -10,18 +10,12 @@ export function createPhysicalMotion({ baseX, baseZ, halfWidth, halfDepth, radiu
   const xLimit = Math.max(radius, halfWidth - radius);
   const zLimit = Math.max(radius * .5, halfDepth - radius * .7);
   return {
-    x: clamp(spacious ? side * Math.min(xLimit * .72, 4.2) : baseX + signed() * radius * .5, -xLimit, xLimit),
+    x: clamp(baseX + signed() * radius * (spacious ? .25 : .5), -xLimit, xLimit),
     z: clamp(baseZ + signed() * Math.min(radius, .45), -zLimit, zLimit),
     y: radius * (.75 + random() * .5),
-    vx: spacious ? -side * (10 + random() * 3) : signed() * (3 + random() * 4),
+    vx: spacious ? side * (10 + random() * 3) : signed() * (3 + random() * 4),
     vz: signed() * (2.5 + random() * 2.5),
     vy: 2 + random() * 2.2,
-    ax: random() * Math.PI * 2,
-    ay: random() * Math.PI * 2,
-    az: random() * Math.PI * 2,
-    wx: (signed() || 1) * (9 + random() * 7),
-    wy: (signed() || 1) * (8 + random() * 6),
-    wz: (signed() || 1) * (7 + random() * 6),
     radius,
     xLimit,
     zLimit,
@@ -56,22 +50,12 @@ export function stepPhysicalMotion(body, seconds) {
     if (impact) {
       body.vx *= .88;
       body.vz *= .88;
-      body.wx *= .75;
-      body.wy *= .75;
-      body.wz *= .75;
       body.floorHits++;
     }
   }
   const drag = Math.exp(-(body.y === 0 ? 1 : .52) * dt);
   body.vx *= drag;
   body.vz *= drag;
-  body.ax += body.wx * dt;
-  body.ay += body.wy * dt;
-  body.az += body.wz * dt;
-  const angularDrag = Math.exp(-(body.y === 0 ? 2.6 : .34) * dt);
-  body.wx *= angularDrag;
-  body.wy *= angularDrag;
-  body.wz *= angularDrag;
   return body;
 }
 
@@ -102,8 +86,6 @@ export function resolvePhysicalCollisions(bodies) {
         b.vz += impulse * nz;
         a.vy = Math.max(a.vy, .35);
         b.vy = Math.max(b.vy, .35);
-        a.wy += impulse * .24;
-        b.wy -= impulse * .24;
       }
     }
   }
@@ -112,11 +94,26 @@ export function resolvePhysicalCollisions(bodies) {
 export function settlePhysicalMotion(body, progress) {
   const t = clamp(progress, 0, 1);
   const travel = 1 - Math.pow(1 - t, 3);
-  const rotation = t * t * (3 - 2 * t);
   return {
     x: clamp(body.x + body.vx * .12 * travel, -body.xLimit, body.xLimit),
     y: body.y * (1 - travel),
     z: clamp(body.z + body.vz * .12 * travel, -body.zLimit, body.zLimit),
-    rotation,
+  };
+}
+
+export function createSpinProfile(random = Math.random) {
+  const turn = () => (random() < .5 ? -1 : 1) * Math.PI * (5 + random() * 3);
+  return { x: turn(), y: turn(), z: turn(), phase: random() * Math.PI * 2 };
+}
+
+export function spinAt(progress, profile) {
+  const remaining = 1 - clamp(progress, 0, 1);
+  const energy = Math.pow(remaining, 2.2);
+  const wobble = Math.sin(progress * Math.PI * 8 + profile.phase) * remaining * remaining * .24;
+  return {
+    x: profile.x * energy + wobble,
+    y: profile.y * energy - wobble * .7,
+    z: profile.z * energy + wobble * .45,
+    blur: 2.6 * Math.pow(remaining, 1.5),
   };
 }

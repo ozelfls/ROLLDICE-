@@ -154,10 +154,12 @@ try {
   await delay(650);
   assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), 0);
   assert.ok(await evaluate('document.querySelector("#result-meta").textContent.includes("lançamento em andamento")'));
+  assert.ok(await evaluate('document.querySelector("#dice-stage canvas").style.filter.startsWith("blur(")'));
   const flight = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
   await writeFile(path.join(folder, 'd20-flight.png'), Buffer.from(flight.data, 'base64'));
   await waitFor('document.querySelectorAll("#history-list li").length === 11');
   assert.ok(await evaluate('document.querySelector("#result-value").textContent.includes("Total:")'));
+  assert.equal(await evaluate('document.querySelector("#dice-stage canvas").style.filter'), '');
   assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), 1);
   await evaluate('document.querySelector("#mode-grid [data-value=vantagem]").click()');
   assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), 1);
@@ -172,6 +174,7 @@ try {
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
   await waitFor('document.querySelectorAll("#history-list li").length === 13');
   assert.ok(await evaluate('document.querySelector("#result-value").textContent.includes("Total:")'));
+  assert.equal(await evaluate('document.querySelector("#dice-stage canvas").style.filter'), '');
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
   assert.ok(await evaluate('document.querySelector("#roll-form button[type=submit]").textContent.includes("Pular")'));
   await evaluate('document.querySelector("#reset-button").click()');

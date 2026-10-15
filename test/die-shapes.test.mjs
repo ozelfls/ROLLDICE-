@@ -1,7 +1,7 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDieShape } from '../src/die-shapes.mjs';
-import { createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, settlePhysicalMotion, PHYSICAL_PHASE, ROLL_DURATION } from '../src/dice-motion.mjs';
+import { createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, settlePhysicalMotion, createSpinProfile, spinAt, PHYSICAL_PHASE, ROLL_DURATION } from '../src/dice-motion.mjs';
 
 const counts = { d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, d20: 20, d100: 100, dpercent: 10 };
 const subtract = (a, b) => a.map((value, index) => value - b[index]);
@@ -46,12 +46,17 @@ test('faces opostas do D20 somam vinte e um', () => {
 test('movimento termina estável entre um e meio e dois e meio segundos', () => {
   assert.ok(ROLL_DURATION >= 1500 && ROLL_DURATION <= 2500);
   const body = { x: 2.5, y: .4, z: -.6, vx: .7, vz: -.3, xLimit: 4, zLimit: 1.5 };
-  assert.deepEqual(settlePhysicalMotion(body, 0), { x: 2.5, y: .4, z: -.6, rotation: 0 });
+  assert.deepEqual(settlePhysicalMotion(body, 0), { x: 2.5, y: .4, z: -.6 });
   const end = settlePhysicalMotion(body, 1);
   assert.equal(end.y, 0);
-  assert.equal(end.rotation, 1);
   assert.ok(end.x > 2.5 && end.x < 4);
   assert.ok(end.z < -.6 && end.z > -1.5);
+  const profile = createSpinProfile(() => .7);
+  const fast = spinAt(.1, profile);
+  const slow = spinAt(.8, profile);
+  assert.ok(Math.hypot(fast.x, fast.y, fast.z) > Math.hypot(slow.x, slow.y, slow.z) * 5);
+  assert.ok(fast.blur > slow.blur);
+  assert.deepEqual(spinAt(1, profile), { x: 0, y: 0, z: 0, blur: 0 });
 });
 
 test('lançamento físico percorre o painel, quica e permanece dentro das bordas', () => {
