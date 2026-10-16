@@ -1,15 +1,71 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createDieShape } from './die-shapes.mjs';
 import { SKINS, numberTexture, faceMaterial, edgeMaterial } from './dice-skins.mjs';
 import { createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, settlePhysicalMotion, createSpinProfile, spinAt, PHYSICAL_PHASE, ROLL_DURATION } from './dice-motion.mjs';
 
 const shapeCache = new Map();
+let contactTexture;
+
+function contactShadowTexture() {
+  if (contactTexture) return contactTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext('2d');
+  const gradient = context.createRadialGradient(64, 64, 5, 64, 64, 62);
+  gradient.addColorStop(0, 'rgba(47, 20, 15, .72)');
+  gradient.addColorStop(.38, 'rgba(47, 20, 15, .38)');
+  gradient.addColorStop(1, 'rgba(47, 20, 15, 0)');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 128, 128);
+  contactTexture = new THREE.CanvasTexture(canvas);
+  return contactTexture;
+}
+
+function addGoldTrim(group, shape) {
+  const gold = new THREE.MeshStandardMaterial({ color: 0xc9924d, metalness: .72, roughness: .3, envMapIntensity: .8 });
+  const unique = new Set();
+  const points = new Set();
+  for (const face of shape.faces) {
+    for (let corner = 0; corner < face.vertices.length; corner++) {
+      const a = face.vertices[corner];
+      const b = face.vertices[(corner + 1) % face.vertices.length];
+      const key = [a, b].sort((left, right) => left - right).join(':');
+      if (unique.has(key)) continue;
+      unique.add(key);
+      points.add(a);
+      points.add(b);
+      const start = new THREE.Vector3(...shape.vertices[a]);
+      const end = new THREE.Vector3(...shape.vertices[b]);
+      const direction = end.clone().sub(start);
+      const trim = new THREE.Mesh(new THREE.CylinderGeometry(.011, .011, direction.length(), 7), gold);
+      trim.position.copy(start).add(end).multiplyScalar(.5).multiplyScalar(1.006);
+      trim.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+      group.add(trim);
+    }
+  }
+  const cap = new THREE.SphereGeometry(.013, 8, 6);
+  for (const index of points) {
+    const jewel = new THREE.Mesh(cap, gold);
+    jewel.position.fromArray(shape.vertices[index]).multiplyScalar(1.006);
+    group.add(jewel);
+  }
+}
 
 function modelFor(dice) {
   if (shapeCache.has(dice)) return shapeCache.get(dice);
   const shape = createDieShape(dice);
   shapeCache.set(dice, shape);
   return shape;
+}
+
+export function faceFrame(points) {
+  const normal = new THREE.Vector3().crossVectors(points[1].clone().sub(points[0]), points[2].clone().sub(points[0])).normalize();
+  const right = points[1].clone().sub(points[0]).normalize();
+  const up = new THREE.Vector3().crossVectors(normal, right).normalize();
+  const quaternion = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, normal));
+  return { right, up, normal, quaternion };
 }
 
 function makeDie(dice, skin) {
@@ -19,11 +75,8 @@ function makeDie(dice, skin) {
   shape.faces.forEach((face, index) => {
     const points = face.vertices.map((vertex) => new THREE.Vector3(...shape.vertices[vertex]));
     const center = points.reduce((sum, point) => sum.add(point), new THREE.Vector3()).multiplyScalar(1 / points.length);
-    const normal = new THREE.Vector3().crossVectors(points[1].clone().sub(points[0]), points[2].clone().sub(points[0])).normalize();
-    const right = points[1].clone().sub(points[0]).normalize();
-    const up = new THREE.Vector3().crossVectors(normal, right).normalize();
-    const localFrame = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, normal));
-    faceFrames.set(face.label, localFrame);
+    const { right, up, normal, quaternion } = faceFrame(points);
+    faceFrames.set(face.label, quaternion);
     const vertices = [];
     const uv = [];
     const radius = Math.max(...points.map((point) => point.distanceTo(center)));
@@ -45,23 +98,22 @@ function makeDie(dice, skin) {
     for (let corner = 0; corner < points.length; corner++) edges.push(...points[corner], ...points[(corner + 1) % points.length]);
     const edgeGeometry = new THREE.BufferGeometry();
     edgeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(edges, 3));
-    group.add(new THREE.LineSegments(edgeGeometry, edgeMaterial(skin)));
+    if (skin !== 'dragonflame' || dice !== 'd20') group.add(new THREE.LineSegments(edgeGeometry, edgeMaterial(skin)));
+    else edgeGeometry.dispose();
     const labelSize = dice === 'd100' ? .17 : Math.min(.53, Math.max(.25, Math.min(...points.map((point) => point.distanceTo(center))) * 1.05));
     const label = new THREE.Mesh(new THREE.PlaneGeometry(labelSize, labelSize), new THREE.MeshBasicMaterial({ map: numberTexture(face.label, skin), transparent: true, depthWrite: false, side: THREE.FrontSide }));
     label.position.copy(center).addScaledVector(normal, .018);
-    label.quaternion.copy(localFrame);
+    label.quaternion.copy(quaternion);
     group.add(label);
   });
+  if (skin === 'dragonflame' && dice === 'd20') addGoldTrim(group, shape);
   return { group, faceFrames };
 }
 
-function finalRotation(model, value) {
-  const frame = model.faceFrames.get(value);
-  const right = new THREE.Vector3(1, 0, 0);
-  const up = new THREE.Vector3(0, 0, -1);
-  const normal = new THREE.Vector3(0, 1, 0);
-  const worldFrame = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, normal));
-  return worldFrame.multiply(frame.clone().invert());
+export function finalRotation(faceFrames, value, cameraQuaternion) {
+  const frame = faceFrames.get(value);
+  if (!frame) throw new RangeError('Face do dado não encontrada.');
+  return cameraQuaternion.clone().multiply(frame.clone().invert());
 }
 
 export class DiceView {
@@ -77,14 +129,26 @@ export class DiceView {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.setClearColor(0x000000, 0);
     this.stage.append(this.renderer.domElement);
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x7d4e37, 2.15));
+    const environment = new RoomEnvironment();
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(environment).texture;
+    pmrem.dispose();
+    environment.dispose();
+    const ambient = new THREE.HemisphereLight(0xffffff, 0x7d4e37, 2.15);
+    this.scene.add(ambient);
     const key = new THREE.DirectionalLight(0xffffff, 2.2);
     key.position.set(-3, 8, 5);
     this.scene.add(key);
     const rim = new THREE.DirectionalLight(0x8de9d6, 1.15);
     rim.position.set(5, 4, -6);
     this.scene.add(rim);
+    const fill = new THREE.DirectionalLight(0xffc47f, 0);
+    fill.position.set(4, 2, 7);
+    this.scene.add(fill);
+    this.ambient = ambient;
+    this.key = key;
     this.rim = rim;
+    this.fill = fill;
     this.skin = 'classic';
     this.stage.dataset.skin = this.skin;
     this.displayState = null;
@@ -137,6 +201,12 @@ export class DiceView {
     this.skin = skin;
     this.stage.dataset.skin = skin;
     this.rim.color.setHex(SKINS[skin].rim);
+    this.renderer.toneMapping = skin === 'dragonflame' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+    this.renderer.toneMappingExposure = skin === 'dragonflame' ? .95 : 1;
+    this.ambient.intensity = skin === 'dragonflame' ? .9 : 2.15;
+    this.key.intensity = skin === 'dragonflame' ? 1.85 : 2.2;
+    this.rim.intensity = skin === 'dragonflame' ? .95 : 1.15;
+    this.fill.intensity = skin === 'dragonflame' ? .35 : 0;
     if (state) this.show(state.dice, state.quantity, state.mode, state.result, positions);
     return true;
   }
@@ -188,12 +258,12 @@ export class DiceView {
         root.position.set(placement?.x ?? centerX + (pair ? (member - .5) * scale * (dice === 'd100' ? 2.1 : 1.75) : 0), 0, placement?.z ?? centerZ);
         model.group.scale.setScalar(scale);
         root.add(model.group);
-        const shadow = new THREE.Mesh(new THREE.CircleGeometry(scale * 1.05, 32), new THREE.MeshBasicMaterial({ color: 0x552c1d, transparent: true, opacity: .13, depthWrite: false }));
+        const shadow = new THREE.Mesh(new THREE.PlaneGeometry(scale * 2.25, scale * 2.25), new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, opacity: .58, depthWrite: false, side: THREE.DoubleSide }));
         shadow.rotation.x = -Math.PI / 2;
         shadow.position.set(root.position.x, -1.12 * scale, root.position.z);
         this.scene.add(root, shadow);
         const value = result?.results[slot]?.rolls[member];
-        const target = finalRotation(model, value ?? (dice === 'dpercent' ? 10 : 1));
+        const target = finalRotation(model.faceFrames, value ?? (dice === 'dpercent' ? 10 : 1), this.camera.quaternion);
         model.group.quaternion.copy(target);
         const item = { root, shadow, model, value, target, slot, member, base: root.position.clone() };
         this.items.push(item);
@@ -232,7 +302,7 @@ export class DiceView {
     const token = this.token;
     this.items.forEach((item) => {
       const value = result.results[item.slot].rolls[item.member];
-      item.target = finalRotation(item.model, value);
+      item.target = finalRotation(item.model.faceFrames, value, this.camera.quaternion);
     });
     const startTime = performance.now();
     let previousTime = startTime;
@@ -291,7 +361,8 @@ export class DiceView {
         this.items.forEach((item) => {
           item.shadow.position.x = item.root.position.x;
           item.shadow.position.z = item.root.position.z;
-          item.shadow.material.opacity = .13 / (1 + item.root.position.y * .65);
+          item.shadow.material.opacity = .58 / (1 + item.root.position.y * 1.2);
+          item.shadow.scale.setScalar(1 + item.root.position.y * .18);
         });
         previousTime = now;
         this.render();

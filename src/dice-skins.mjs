@@ -46,16 +46,16 @@ export const SKINS = Object.freeze({
   dragonflame: Object.freeze({
     label: 'Dragonflame Red',
     accent: '#d34b40',
-    colors: [0xab1825, 0x861321, 0xc22b2b, 0x971426],
-    edge: 0xe6ad52,
-    number: '#ffdb8b',
-    roughness: .19,
-    metalness: .18,
-    clearcoat: 1,
-    clearcoatRoughness: .09,
-    emissive: 0x5b0710,
-    emissiveIntensity: .13,
-    rim: 0xffb36a,
+    colors: [0xa70d22, 0x82091b, 0xb41429, 0x970d20],
+    edge: 0xeabd67,
+    number: '#ffe2a1',
+    roughness: .18,
+    metalness: .08,
+    clearcoat: .72,
+    clearcoatRoughness: .14,
+    emissive: 0x430006,
+    emissiveIntensity: .055,
+    rim: 0xffc181,
   }),
 });
 
@@ -100,14 +100,28 @@ export function numberTexture(value, skin) {
   const key = `${value}:${color}`;
   if (labelCache.has(key)) return labelCache.get(key);
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
+  canvas.width = 512;
+  canvas.height = 512;
   const context = canvas.getContext('2d');
-  context.fillStyle = color;
-  context.font = `900 ${String(value).length > 2 ? 112 : 145}px system-ui`;
+  const dragon = skin === 'dragonflame';
+  const size = String(value).length > 2 ? 224 : 290;
+  context.font = `900 ${size}px system-ui`;
   context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.fillText(String(value), 128, 135);
+  context.textBaseline = 'alphabetic';
+  context.lineJoin = 'round';
+  const metrics = context.measureText(String(value));
+  const baseline = (512 + metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
+  if (dragon) {
+    context.strokeStyle = '#5f2310';
+    context.lineWidth = 13;
+    context.strokeText(String(value), 256, baseline);
+    const gold = context.createLinearGradient(0, baseline - size * .5, 0, baseline + size * .35);
+    gold.addColorStop(0, '#fff5c9');
+    gold.addColorStop(.42, color);
+    gold.addColorStop(1, '#b87930');
+    context.fillStyle = gold;
+  } else context.fillStyle = color;
+  context.fillText(String(value), 256, baseline);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   labelCache.set(key, texture);
@@ -123,6 +137,7 @@ export function faceMaterial(skin, index) {
     metalness: style.metalness,
     clearcoat: style.clearcoat,
     clearcoatRoughness: style.clearcoatRoughness,
+    envMapIntensity: skin === 'dragonflame' ? .85 : 0,
     emissive: style.emissive,
     emissiveIntensity: style.emissiveIntensity,
     side: THREE.FrontSide,

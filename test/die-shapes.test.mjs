@@ -1,6 +1,8 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
 import { createDieShape } from '../src/die-shapes.mjs';
+import { faceFrame, finalRotation } from '../src/dice-view.mjs';
 import { createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, settlePhysicalMotion, createSpinProfile, spinAt, PHYSICAL_PHASE, ROLL_DURATION } from '../src/dice-motion.mjs';
 
 const counts = { d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, d20: 20, d100: 100, dpercent: 10 };
@@ -40,6 +42,26 @@ test('faces opostas do D20 somam vinte e um', () => {
     const [x, y, z] = opposite.vertices.map((index) => shape.vertices[index]);
     const other = cross(subtract(y, x), subtract(z, x));
     assert.ok(dot(normal, other) < -dot(normal, normal) * .999);
+  }
+});
+
+test('cada resultado do D20 termina voltado e alinhado para a câmera', () => {
+  const shape = createDieShape('d20');
+  const frames = new Map(shape.faces.map((face) => {
+    const points = face.vertices.map((index) => new THREE.Vector3(...shape.vertices[index]));
+    return [face.label, faceFrame(points).quaternion];
+  }));
+  const camera = new THREE.OrthographicCamera(-5, 5, 4, -4, .1, 100);
+  camera.position.set(0, 13, 7);
+  camera.lookAt(0, 0, 0);
+  const towardCamera = camera.position.clone().normalize();
+  const screenUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+  for (const face of shape.faces) {
+    const points = face.vertices.map((index) => new THREE.Vector3(...shape.vertices[index]));
+    const frame = faceFrame(points);
+    const rotation = finalRotation(frames, face.label, camera.quaternion);
+    assert.ok(frame.normal.clone().applyQuaternion(rotation).dot(towardCamera) > .999999, face.label);
+    assert.ok(frame.up.clone().applyQuaternion(rotation).dot(screenUp) > .999999, face.label);
   }
 });
 
