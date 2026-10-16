@@ -100,10 +100,23 @@ export function numberTexture(value, skin) {
   const key = `${value}:${color}`;
   if (labelCache.has(key)) return labelCache.get(key);
   const canvas = document.createElement('canvas');
+  if (skin !== 'dragonflame') {
+    canvas.width = 256;
+    canvas.height = 256;
+    const context = canvas.getContext('2d');
+    context.fillStyle = color;
+    context.font = `900 ${String(value).length > 2 ? 112 : 145}px system-ui`;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(String(value), 128, 135);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    labelCache.set(key, texture);
+    return texture;
+  }
   canvas.width = 512;
   canvas.height = 512;
   const context = canvas.getContext('2d');
-  const dragon = skin === 'dragonflame';
   const size = String(value).length > 2 ? 224 : 290;
   context.font = `900 ${size}px system-ui`;
   context.textAlign = 'center';
@@ -111,16 +124,14 @@ export function numberTexture(value, skin) {
   context.lineJoin = 'round';
   const metrics = context.measureText(String(value));
   const baseline = (512 + metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
-  if (dragon) {
-    context.strokeStyle = '#5f2310';
-    context.lineWidth = 13;
-    context.strokeText(String(value), 256, baseline);
-    const gold = context.createLinearGradient(0, baseline - size * .5, 0, baseline + size * .35);
-    gold.addColorStop(0, '#fff5c9');
-    gold.addColorStop(.42, color);
-    gold.addColorStop(1, '#b87930');
-    context.fillStyle = gold;
-  } else context.fillStyle = color;
+  context.strokeStyle = '#5f2310';
+  context.lineWidth = 13;
+  context.strokeText(String(value), 256, baseline);
+  const gold = context.createLinearGradient(0, baseline - size * .5, 0, baseline + size * .35);
+  gold.addColorStop(0, '#fff5c9');
+  gold.addColorStop(.42, color);
+  gold.addColorStop(1, '#b87930');
+  context.fillStyle = gold;
   context.fillText(String(value), 256, baseline);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -137,7 +148,7 @@ export function faceMaterial(skin, index) {
     metalness: style.metalness,
     clearcoat: style.clearcoat,
     clearcoatRoughness: style.clearcoatRoughness,
-    envMapIntensity: skin === 'dragonflame' ? .85 : 0,
+    ...(skin === 'dragonflame' ? { envMapIntensity: .85 } : {}),
     emissive: style.emissive,
     emissiveIntensity: style.emissiveIntensity,
     side: THREE.FrontSide,

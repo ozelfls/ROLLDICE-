@@ -104,14 +104,19 @@ try {
   await evaluate('document.querySelector("#skin-trigger").click()');
   const stageClip = await evaluate('(() => { const { x, y, width, height } = document.querySelector("#dice-stage").getBoundingClientRect(); return { x, y, width, height, scale: 1 }; })()');
   let previousSkinImage = (await client.send('Page.captureScreenshot', { format: 'png', clip: stageClip })).data;
+  let behirImage;
   for (const skin of ['scuffed', 'behir', 'dragonflame']) {
     await chooseSkin(skin);
     assert.equal(await evaluate('document.querySelector("#skin-trigger-label").textContent'), { scuffed: 'Scuffed Metal', behir: 'Behir Blue', dragonflame: 'Dragonflame Red' }[skin]);
     const capture = (await client.send('Page.captureScreenshot', { format: 'png', clip: stageClip })).data;
     assert.notEqual(capture, previousSkinImage, `${skin} não mudou a aparência do dado.`);
     await writeFile(path.join(folder, `skin-${skin}.png`), Buffer.from(capture, 'base64'));
+    if (skin === 'behir') behirImage = capture;
     previousSkinImage = capture;
   }
+  await chooseSkin('behir');
+  const restoredBehirImage = (await client.send('Page.captureScreenshot', { format: 'png', clip: stageClip })).data;
+  assert.equal(restoredBehirImage, behirImage, 'A aparência azul mudou após selecionar a Dragonflame Red.');
   await chooseSkin('classic');
   assert.equal(await evaluate('document.querySelectorAll("#mode-grid [role=radio]").length'), 3);
   assert.ok(await evaluate('getComputedStyle(document.body).backgroundColor !== "rgba(0, 0, 0, 0)"'));
