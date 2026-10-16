@@ -86,6 +86,20 @@ try {
 
   await waitFor('document.querySelectorAll("#dice-grid [role=radio]").length === 8');
   assert.equal(await evaluate('document.querySelectorAll("#dice-grid [role=radio]").length'), 8, stderr);
+  assert.equal(await evaluate('document.querySelectorAll("#skin-select option").length'), 4);
+  assert.equal(await evaluate('document.querySelector("#dice-stage").dataset.skin'), 'classic');
+  const stageClip = await evaluate('(() => { const { x, y, width, height } = document.querySelector("#dice-stage").getBoundingClientRect(); return { x, y, width, height, scale: 1 }; })()');
+  let previousSkinImage = (await client.send('Page.captureScreenshot', { format: 'png', clip: stageClip })).data;
+  for (const skin of ['scuffed', 'behir', 'dragonflame']) {
+    await evaluate(`document.querySelector('#skin-select').value = '${skin}'; document.querySelector('#skin-select').dispatchEvent(new Event('change'))`);
+    assert.equal(await evaluate('document.querySelector("#dice-stage").dataset.skin'), skin);
+    assert.equal(await evaluate('document.querySelector("#skin-select").value'), skin);
+    const capture = (await client.send('Page.captureScreenshot', { format: 'png', clip: stageClip })).data;
+    assert.notEqual(capture, previousSkinImage, `${skin} não mudou a aparência do dado.`);
+    await writeFile(path.join(folder, `skin-${skin}.png`), Buffer.from(capture, 'base64'));
+    previousSkinImage = capture;
+  }
+  await evaluate('document.querySelector("#skin-select").value = "classic"; document.querySelector("#skin-select").dispatchEvent(new Event("change"))');
   assert.equal(await evaluate('document.querySelectorAll("#mode-grid [role=radio]").length'), 3);
   assert.ok(await evaluate('getComputedStyle(document.body).backgroundColor !== "rgba(0, 0, 0, 0)"'));
   assert.equal(await evaluate('document.querySelector("#modifier").min'), '-100');
@@ -93,7 +107,8 @@ try {
   assert.equal(await evaluate('document.querySelector("#quantity").max'), '1');
   assert.equal(await evaluate('document.querySelector("#quantity").readOnly'), true);
   assert.ok(await evaluate('document.querySelector("#reset-button").getBoundingClientRect().right <= window.innerWidth - 4'), 'A barra de ações ultrapassou a janela.');
-  assert.ok(await evaluate('document.documentElement.scrollHeight <= window.innerHeight + 400'), 'A tela inicial ficou alta demais.');
+  const layout = await evaluate('({ scroll: document.documentElement.scrollHeight, viewport: window.innerHeight })');
+  assert.ok(layout.scroll <= layout.viewport + 400, `A tela inicial ficou alta demais: ${JSON.stringify(layout)}`);
   assert.equal(await evaluate('document.querySelector("#history-panel").open'), false);
   await evaluate('document.querySelector("#dice-grid [data-value=d4]").click()');
   assert.equal(await evaluate('document.querySelector("#quantity").max'), '12');
@@ -114,12 +129,19 @@ try {
   await evaluate('document.querySelector("#difficulty").value = "1"');
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
   assert.ok(await evaluate('document.querySelector("#roll-form button[type=submit]").textContent.includes("Pular")'));
+  assert.equal(await evaluate('document.querySelector("#skin-select").disabled'), true);
   await waitFor('document.querySelector("#roll-badge").textContent === "VALOR BRUTO"');
   await waitFor('document.querySelector("#roll-badge").textContent.includes("BÔNUS 1/")');
   await waitFor('document.querySelectorAll("#history-list li").length === 1');
+  assert.equal(await evaluate('document.querySelector("#skin-select").disabled'), false);
   assert.equal(await evaluate('document.querySelector("#reroll-button").disabled'), false);
   assert.ok(await evaluate('document.querySelector("#result-value").textContent.includes("Total:")'));
   assert.ok(await evaluate('document.querySelector("#result-meta").textContent.includes("CD: 1")'));
+  const previousResult = await evaluate('document.querySelector("#result-value").textContent');
+  const previousDice = await evaluate('document.querySelector("#dice-labels").textContent');
+  await evaluate('document.querySelector("#skin-select").value = "dragonflame"; document.querySelector("#skin-select").dispatchEvent(new Event("change"))');
+  assert.equal(await evaluate('document.querySelector("#result-value").textContent'), previousResult);
+  assert.equal(await evaluate('document.querySelector("#dice-labels").textContent'), previousDice);
   await evaluate('document.querySelector("#reroll-button").click()');
   await waitFor('document.querySelectorAll("#history-list li").length === 2');
   assert.ok(await evaluate('document.querySelector("#result-meta").textContent.includes("rerrolagem")'));
@@ -131,7 +153,10 @@ try {
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
   assert.equal(await evaluate('document.querySelectorAll("#history-list li").length'), 2);
   assert.ok(await evaluate('document.querySelector("#form-error").textContent.includes("1 e 12")'));
-  for (const [dice, maximum] of [['d4', 12], ['d6', 12], ['d8', 12], ['d10', 4], ['d12', 4], ['d20', 1], ['d100', 1], ['dpercent', 1]]) {
+  for (const [index, [dice, maximum]] of [['d4', 12], ['d6', 12], ['d8', 12], ['d10', 4], ['d12', 4], ['d20', 1], ['d100', 1], ['dpercent', 1]].entries()) {
+    const skin = ['scuffed', 'behir', 'dragonflame'][index % 3];
+    await evaluate(`document.querySelector('#skin-select').value = '${skin}'; document.querySelector('#skin-select').dispatchEvent(new Event('change'))`);
+    assert.equal(await evaluate('document.querySelector("#dice-stage").dataset.skin'), skin);
     await evaluate(`document.querySelector('#dice-grid [data-value=${dice}]').click()`);
     await evaluate(`document.querySelector('#quantity').value = '${maximum}'; document.querySelector('#quantity').dispatchEvent(new Event('input'))`);
     assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), maximum);

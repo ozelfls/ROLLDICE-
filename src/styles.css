@@ -45,6 +45,20 @@ body {
   box-shadow: 0 5px 16px rgba(98, 220, 196, .15);
 }
 
+.skin-select {
+  width: min(184px, 49%);
+  height: 27px;
+  border-color: var(--skin-accent);
+  border-width: 1px;
+  border-radius: 9px;
+  background: linear-gradient(90deg, var(--skin-accent) 0 8px, var(--page) 8px);
+  color: var(--text);
+  padding-left: 12px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.skin-select:disabled { opacity: .6; }
+
 .step-button {
   display: grid;
   width: 34px;
@@ -151,7 +165,7 @@ body {
 .history-chevron { display: inline-block; transition: transform .18s ease; }
 #history-panel[open] .history-chevron { transform: rotate(180deg); }
 
-button:focus-visible, input:focus-visible {
+button:focus-visible, input:focus-visible, select:focus-visible {
   outline: 2px solid #d9fd62;
   outline-offset: 3px;
 }

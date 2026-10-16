@@ -19,6 +19,7 @@ O primeiro comando instala Electron, Three.js e as ferramentas de compilação. 
 ## Funcionalidades
 
 - D4, D6, D8, D10, D12, D20, D100 e D% (10% a 90% em passos de dez; a face 00 é decorativa).
+- Skins Clássico, Scuffed Metal, Behir Blue e Dragonflame Red para todos os dados. A troca é visual e pode ser feita sem alterar o resultado já exibido.
 - Todos os dados têm modelos tridimensionais com faces numeradas e resultado visível até a próxima interação. Eles atravessam o painel com trajetórias variáveis, gravidade, quicadas e colisões, parando na posição em que terminaram a rolagem. As faces numeradas passam pelo campo de visão com um borrão de velocidade que desaparece gradualmente; a rotação inteira já conduz à face sorteada, sem correção final separada.
 - D20, D100 e D%: 1 dado por rolagem. Para D20, vantagem e desvantagem fazem duas jogadas do mesmo dado e escolhem o maior ou menor resultado.
 - D10 e D12: até 4 dados por rolagem.
@@ -47,6 +48,7 @@ Estrutura:
 - `electron/main.cjs`: janela desktop e configuração de segurança.
 - `src/engine.mjs`: regras de rolagem independentes da interface.
 - `src/die-shapes.mjs`: geometria dos oito tipos de dado.
+- `src/dice-skins.mjs`: materiais, números e cores das skins.
 - `src/dice-view.mjs`: renderização tridimensional com Three.js.
 - `src/dice-motion.mjs`: trajetória e duração da animação.
 - `src/app.mjs`: estado e interações da janela.

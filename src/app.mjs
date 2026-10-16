@@ -1,7 +1,9 @@
 import { DICE, MAX_QUANTITY, rollDice, rerollDice } from './engine.mjs';
 import { DiceView } from './dice-view.mjs';
+import { SKINS } from './dice-skins.mjs';
 
 const diceGrid = document.querySelector('#dice-grid');
+const skinSelect = document.querySelector('#skin-select');
 const modeGrid = document.querySelector('#mode-grid');
 const quantityInput = document.querySelector('#quantity');
 const quantityHelp = document.querySelector('#quantity-help');
@@ -25,6 +27,7 @@ const view = new DiceView(document.querySelector('#dice-stage'), document.queryS
 
 const state = {
   dice: 'd20',
+  skin: 'classic',
   mode: 'normal',
   previous: null,
   history: [],
@@ -100,6 +103,19 @@ function selectMode(mode) {
   else preview();
 }
 
+function selectSkin(skin) {
+  if (state.rolling || !view.setSkin(skin)) {
+    skinSelect.value = state.skin;
+    return;
+  }
+  state.skin = skin;
+  skinSelect.style.setProperty('--skin-accent', SKINS[skin].accent);
+}
+
+function setSkinControlsEnabled(enabled) {
+  skinSelect.disabled = !enabled;
+}
+
 function preview() {
   const quantity = Math.min(MAX_QUANTITY[state.dice], Math.max(1, Number(quantityInput.value) || 1));
   view.show(state.dice, quantity, state.mode);
@@ -111,6 +127,16 @@ for (const dice of Object.keys(DICE)) {
   diceGrid.append(createChoice(dice, dice === 'dpercent' ? 'D%' : dice.toUpperCase(), dice === state.dice, diceGrid, selectDice));
 }
 selectDice(state.dice);
+
+for (const [skin, style] of Object.entries(SKINS)) {
+  const option = document.createElement('option');
+  option.value = skin;
+  option.textContent = style.label;
+  skinSelect.append(option);
+}
+skinSelect.value = state.skin;
+skinSelect.style.setProperty('--skin-accent', SKINS[state.skin].accent);
+skinSelect.addEventListener('change', () => selectSkin(skinSelect.value));
 
 modeGrid.setAttribute('role', 'radiogroup');
 modeGrid.setAttribute('aria-label', 'Modo de rolagem');
@@ -246,6 +272,7 @@ function cancelSequence() {
   sequence.wake?.();
   state.sequence = null;
   state.rolling = false;
+  setSkinControlsEnabled(true);
   rollButton.textContent = '🎲 Rolar';
   rerollButton.disabled = true;
 }
@@ -271,6 +298,7 @@ async function play(result, rerolled = false) {
   const sequence = { skipped: false, cancelled: false, wake: null };
   state.sequence = sequence;
   state.rolling = true;
+  setSkinControlsEnabled(false);
   rollButton.textContent = 'Pular animação';
   rerollButton.disabled = true;
   rollBadge.textContent = 'ROLANDO...';
@@ -299,6 +327,7 @@ async function play(result, rerolled = false) {
     if (state.sequence !== sequence) return;
     state.sequence = null;
     state.rolling = false;
+    setSkinControlsEnabled(true);
     rollButton.textContent = '🎲 Rolar';
     rerollButton.disabled = !state.previous;
     if (state.previewPending) preview();

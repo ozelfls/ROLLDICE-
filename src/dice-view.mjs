@@ -1,28 +1,9 @@
 import * as THREE from 'three';
 import { createDieShape } from './die-shapes.mjs';
+import { SKINS, numberTexture, faceMaterial, edgeMaterial } from './dice-skins.mjs';
 import { createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, settlePhysicalMotion, createSpinProfile, spinAt, PHYSICAL_PHASE, ROLL_DURATION } from './dice-motion.mjs';
 
-const palette = [0xffe5b0, 0xffd489, 0xf9c774, 0xffe9bf];
-const labelCache = new Map();
 const shapeCache = new Map();
-
-function labelTexture(value) {
-  const key = String(value);
-  if (labelCache.has(key)) return labelCache.get(key);
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const context = canvas.getContext('2d');
-  context.fillStyle = '#31251e';
-  context.font = `900 ${key.length > 2 ? 112 : 145}px system-ui`;
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.fillText(key, 128, 135);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  labelCache.set(key, texture);
-  return texture;
-}
 
 function modelFor(dice) {
   if (shapeCache.has(dice)) return shapeCache.get(dice);
@@ -31,7 +12,7 @@ function modelFor(dice) {
   return shape;
 }
 
-function makeDie(dice) {
+function makeDie(dice, skin) {
   const shape = modelFor(dice);
   const group = new THREE.Group();
   const faceFrames = new Map();
@@ -44,21 +25,29 @@ function makeDie(dice) {
     const localFrame = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, normal));
     faceFrames.set(face.label, localFrame);
     const vertices = [];
+    const uv = [];
+    const radius = Math.max(...points.map((point) => point.distanceTo(center)));
+    const coordinate = (point) => {
+      const offset = point.clone().sub(center);
+      return [.5 + offset.dot(right) / (2 * radius), .5 + offset.dot(up) / (2 * radius)];
+    };
     for (let corner = 0; corner < points.length; corner++) {
       vertices.push(...center, ...points[corner], ...points[(corner + 1) % points.length]);
+      uv.push(...coordinate(center), ...coordinate(points[corner]), ...coordinate(points[(corner + 1) % points.length]));
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     geometry.computeVertexNormals();
-    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: palette[index % palette.length], roughness: .42, metalness: .04, side: THREE.FrontSide, flatShading: true }));
+    const mesh = new THREE.Mesh(geometry, faceMaterial(skin, index));
     group.add(mesh);
     const edges = [];
     for (let corner = 0; corner < points.length; corner++) edges.push(...points[corner], ...points[(corner + 1) % points.length]);
     const edgeGeometry = new THREE.BufferGeometry();
     edgeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(edges, 3));
-    group.add(new THREE.LineSegments(edgeGeometry, new THREE.LineBasicMaterial({ color: 0x8c5c41, transparent: true, opacity: .72 })));
+    group.add(new THREE.LineSegments(edgeGeometry, edgeMaterial(skin)));
     const labelSize = dice === 'd100' ? .17 : Math.min(.53, Math.max(.25, Math.min(...points.map((point) => point.distanceTo(center))) * 1.05));
-    const label = new THREE.Mesh(new THREE.PlaneGeometry(labelSize, labelSize), new THREE.MeshBasicMaterial({ map: labelTexture(face.label), transparent: true, depthWrite: false, side: THREE.FrontSide }));
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(labelSize, labelSize), new THREE.MeshBasicMaterial({ map: numberTexture(face.label, skin), transparent: true, depthWrite: false, side: THREE.FrontSide }));
     label.position.copy(center).addScaledVector(normal, .018);
     label.quaternion.copy(localFrame);
     group.add(label);
@@ -95,6 +84,10 @@ export class DiceView {
     const rim = new THREE.DirectionalLight(0x8de9d6, 1.15);
     rim.position.set(5, 4, -6);
     this.scene.add(rim);
+    this.rim = rim;
+    this.skin = 'classic';
+    this.stage.dataset.skin = this.skin;
+    this.displayState = null;
     this.items = [];
     this.token = 0;
     this.currentAnimation = null;
@@ -121,6 +114,7 @@ export class DiceView {
   clear() {
     this.token++;
     this.renderer.domElement.style.filter = '';
+    this.displayState = null;
     for (const item of this.items) {
       this.scene.remove(item.root);
       this.scene.remove(item.shadow);
@@ -133,6 +127,18 @@ export class DiceView {
     }
     this.items = [];
     this.labels.replaceChildren();
+  }
+
+  setSkin(skin) {
+    if (!Object.hasOwn(SKINS, skin) || this.currentAnimation) return false;
+    if (this.skin === skin) return true;
+    const state = this.displayState;
+    const positions = this.items.map((item) => ({ x: item.root.position.x, z: item.root.position.z }));
+    this.skin = skin;
+    this.stage.dataset.skin = skin;
+    this.rim.color.setHex(SKINS[skin].rim);
+    if (state) this.show(state.dice, state.quantity, state.mode, state.result, positions);
+    return true;
   }
 
   cancelAnimation() {
@@ -154,6 +160,7 @@ export class DiceView {
 
   show(dice, quantity, mode, result = null, positions = null) {
     this.clear();
+    this.displayState = { dice, quantity, mode, result };
     const pair = mode !== 'normal';
     const columns = quantity === 1 ? 1 : Math.ceil(Math.sqrt(quantity * 1.6));
     const rows = Math.ceil(quantity / columns);
@@ -175,7 +182,7 @@ export class DiceView {
       const centerX = (column - (inRow - 1) / 2) * xStep;
       const centerZ = (row - (rows - 1) / 2) * zStep;
       for (let member = 0; member < (pair ? 2 : 1); member++) {
-        const model = makeDie(dice);
+        const model = makeDie(dice, this.skin);
         const root = new THREE.Group();
         const placement = positions?.[this.items.length];
         root.position.set(placement?.x ?? centerX + (pair ? (member - .5) * scale * (dice === 'd100' ? 2.1 : 1.75) : 0), 0, placement?.z ?? centerZ);
@@ -208,7 +215,10 @@ export class DiceView {
           ring.position.y = -1.1 * scale;
           item.root.add(ring);
         } else item.model.group.traverse((part) => {
-          if (part.material?.isMeshStandardMaterial) part.material.color.lerp(new THREE.Color(0x9b8377), .62);
+          if (part.material?.isMeshStandardMaterial) {
+            part.material.color.lerp(new THREE.Color(0x9b8377), .62);
+            part.material.emissiveIntensity *= .35;
+          }
           if (part.material?.isMeshBasicMaterial || part.material?.isLineBasicMaterial) part.material.opacity = .45;
         });
       }
