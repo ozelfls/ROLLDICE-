@@ -47,7 +47,7 @@ body {
 
 .skin-picker {
   position: relative;
-  width: min(184px, 49%);
+  width: clamp(118px, 26vw, 184px);
   flex: none;
   z-index: 20;
 }
