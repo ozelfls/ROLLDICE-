@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createDieShape } from './die-shapes.mjs';
-import { SKINS, numberTexture, faceMaterial, edgeMaterial } from './dice-skins.mjs';
+import { beveledSurface } from './die-surface.mjs';
+import { SKINS, numberTexture, faceMaterial, edgeMaterial, dragonFaceMaterial, dragonGoldMaterial } from './dice-skins.mjs';
 import { createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, settlePhysicalMotion, createSpinProfile, spinAt, PHYSICAL_PHASE, ROLL_DURATION } from './dice-motion.mjs';
 
 const shapeCache = new Map();
@@ -23,36 +24,6 @@ function contactShadowTexture() {
   return contactTexture;
 }
 
-function addGoldTrim(group, shape) {
-  const gold = new THREE.MeshStandardMaterial({ color: 0xc9924d, metalness: .72, roughness: .3, envMapIntensity: .8 });
-  const unique = new Set();
-  const points = new Set();
-  for (const face of shape.faces) {
-    for (let corner = 0; corner < face.vertices.length; corner++) {
-      const a = face.vertices[corner];
-      const b = face.vertices[(corner + 1) % face.vertices.length];
-      const key = [a, b].sort((left, right) => left - right).join(':');
-      if (unique.has(key)) continue;
-      unique.add(key);
-      points.add(a);
-      points.add(b);
-      const start = new THREE.Vector3(...shape.vertices[a]);
-      const end = new THREE.Vector3(...shape.vertices[b]);
-      const direction = end.clone().sub(start);
-      const trim = new THREE.Mesh(new THREE.CylinderGeometry(.011, .011, direction.length(), 7), gold);
-      trim.position.copy(start).add(end).multiplyScalar(.5).multiplyScalar(1.006);
-      trim.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
-      group.add(trim);
-    }
-  }
-  const cap = new THREE.SphereGeometry(.013, 8, 6);
-  for (const index of points) {
-    const jewel = new THREE.Mesh(cap, gold);
-    jewel.position.fromArray(shape.vertices[index]).multiplyScalar(1.006);
-    group.add(jewel);
-  }
-}
-
 function modelFor(dice) {
   if (shapeCache.has(dice)) return shapeCache.get(dice);
   const shape = createDieShape(dice);
@@ -72,6 +43,16 @@ function makeDie(dice, skin) {
   const shape = modelFor(dice);
   const group = new THREE.Group();
   const faceFrames = new Map();
+  if (skin === 'dragonflame') {
+    const materials = shape.faces.map((face, index) => {
+      const points = face.vertices.map((vertex) => new THREE.Vector3(...shape.vertices[vertex]));
+      faceFrames.set(face.label, faceFrame(points).quaternion);
+      return dragonFaceMaterial(face.label, index, dice);
+    });
+    materials.push(dragonGoldMaterial());
+    group.add(new THREE.Mesh(beveledSurface(shape), materials));
+    return { group, faceFrames };
+  }
   shape.faces.forEach((face, index) => {
     const points = face.vertices.map((vertex) => new THREE.Vector3(...shape.vertices[vertex]));
     const center = points.reduce((sum, point) => sum.add(point), new THREE.Vector3()).multiplyScalar(1 / points.length);
@@ -98,15 +79,13 @@ function makeDie(dice, skin) {
     for (let corner = 0; corner < points.length; corner++) edges.push(...points[corner], ...points[(corner + 1) % points.length]);
     const edgeGeometry = new THREE.BufferGeometry();
     edgeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(edges, 3));
-    if (skin !== 'dragonflame' || dice !== 'd20') group.add(new THREE.LineSegments(edgeGeometry, edgeMaterial(skin)));
-    else edgeGeometry.dispose();
+    group.add(new THREE.LineSegments(edgeGeometry, edgeMaterial(skin)));
     const labelSize = dice === 'd100' ? .17 : Math.min(.53, Math.max(.25, Math.min(...points.map((point) => point.distanceTo(center))) * 1.05));
     const label = new THREE.Mesh(new THREE.PlaneGeometry(labelSize, labelSize), new THREE.MeshBasicMaterial({ map: numberTexture(face.label, skin), transparent: true, depthWrite: false, side: THREE.FrontSide }));
     label.position.copy(center).addScaledVector(normal, .018);
     label.quaternion.copy(quaternion);
     group.add(label);
   });
-  if (skin === 'dragonflame' && dice === 'd20') addGoldTrim(group, shape);
   return { group, faceFrames };
 }
 
@@ -182,7 +161,8 @@ export class DiceView {
       item.shadow.material.dispose();
       item.root.traverse((part) => {
         part.geometry?.dispose();
-        part.material?.dispose();
+        if (Array.isArray(part.material)) part.material.forEach((material) => material.dispose());
+        else part.material?.dispose();
       });
     }
     this.items = [];
@@ -206,7 +186,7 @@ export class DiceView {
     }
     this.scene.environment = skin === 'dragonflame' ? this.dragonEnvironment : null;
     this.renderer.toneMapping = skin === 'dragonflame' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
-    this.renderer.toneMappingExposure = skin === 'dragonflame' ? .95 : 1;
+    this.renderer.toneMappingExposure = skin === 'dragonflame' ? .87 : 1;
     this.ambient.intensity = skin === 'dragonflame' ? .9 : 2.15;
     this.key.intensity = skin === 'dragonflame' ? 1.85 : 2.2;
     this.rim.intensity = skin === 'dragonflame' ? .95 : 1.15;
@@ -291,11 +271,14 @@ export class DiceView {
           ring.position.y = -1.1 * scale;
           item.root.add(ring);
         } else item.model.group.traverse((part) => {
-          if (part.material?.isMeshStandardMaterial) {
-            part.material.color.lerp(new THREE.Color(0x9b8377), .62);
-            part.material.emissiveIntensity *= .35;
+          const materials = Array.isArray(part.material) ? part.material : [part.material];
+          for (const material of materials) {
+            if (material?.isMeshStandardMaterial) {
+              material.color.lerp(new THREE.Color(0x9b8377), .62);
+              material.emissiveIntensity *= .35;
+            }
+            if (material?.isMeshBasicMaterial || material?.isLineBasicMaterial) material.opacity = .45;
           }
-          if (part.material?.isMeshBasicMaterial || part.material?.isLineBasicMaterial) part.material.opacity = .45;
         });
       }
     }

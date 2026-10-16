@@ -171,6 +171,10 @@ try {
   await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
   assert.equal(await evaluate('document.querySelectorAll("#history-list li").length'), 2);
   assert.ok(await evaluate('document.querySelector("#form-error").textContent.includes("1 e 12")'));
+  await chooseSkin('dragonflame');
+  await evaluate('document.querySelector("#dice-grid [data-value=d100]").click()');
+  const redHundred = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+  await writeFile(path.join(folder, 'd100-dragonflame.png'), Buffer.from(redHundred.data, 'base64'));
   for (const [index, [dice, maximum]] of [['d4', 12], ['d6', 12], ['d8', 12], ['d10', 4], ['d12', 4], ['d20', 1], ['d100', 1], ['dpercent', 1]].entries()) {
     const skin = ['scuffed', 'behir', 'dragonflame'][index % 3];
     await chooseSkin(skin);

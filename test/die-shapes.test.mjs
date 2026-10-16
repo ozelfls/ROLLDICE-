@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { createDieShape } from '../src/die-shapes.mjs';
+import { beveledSurface } from '../src/die-surface.mjs';
 import { faceFrame, finalRotation } from '../src/dice-view.mjs';
 import { createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, settlePhysicalMotion, createSpinProfile, spinAt, PHYSICAL_PHASE, ROLL_DURATION } from '../src/dice-motion.mjs';
 
@@ -42,6 +43,36 @@ test('faces opostas do D20 somam vinte e um', () => {
     const [x, y, z] = opposite.vertices.map((index) => shape.vertices[index]);
     const other = cross(subtract(y, x), subtract(z, x));
     assert.ok(dot(normal, other) < -dot(normal, normal) * .999);
+  }
+});
+
+test('a superfície chanfrada vermelha fecha todos os formatos sem faces invertidas', () => {
+  for (const dice of Object.keys(counts)) {
+    const shape = createDieShape(dice);
+    const geometry = beveledSurface(shape);
+    const coordinates = geometry.getAttribute('position');
+    const normals = geometry.getAttribute('normal');
+    const edges = new Map();
+    assert.ok(geometry.groups.length > shape.faces.length, dice);
+    assert.deepEqual(geometry.groups.slice(0, shape.faces.length).map((group) => group.materialIndex), shape.faces.map((_, index) => index), dice);
+    if (dice === 'd20') assert.ok(geometry.groups.slice(0, 20).every((group) => group.count === 3));
+    for (let index = 0; index < coordinates.count; index += 3) {
+      const points = [0, 1, 2].map((offset) => new THREE.Vector3().fromBufferAttribute(coordinates, index + offset));
+      const normal = new THREE.Vector3().fromBufferAttribute(normals, index);
+      const actual = new THREE.Vector3().crossVectors(points[1].clone().sub(points[0]), points[2].clone().sub(points[0]));
+      const center = points.reduce((sum, point) => sum.add(point), new THREE.Vector3()).multiplyScalar(1 / 3);
+      assert.ok(actual.length() > 1e-9, `${dice}: triângulo degenerado`);
+      assert.ok(actual.dot(center) > 0, `${dice}: face invertida`);
+      assert.ok(actual.normalize().dot(normal) > .999999, `${dice}: normal incorreta`);
+      for (let corner = 0; corner < 3; corner++) {
+        const a = points[corner].toArray().map((value) => value.toFixed(7)).join(',');
+        const b = points[(corner + 1) % 3].toArray().map((value) => value.toFixed(7)).join(',');
+        const key = [a, b].sort().join('|');
+        edges.set(key, (edges.get(key) ?? 0) + 1);
+      }
+    }
+    for (const uses of edges.values()) assert.equal(uses, 2, `${dice}: aresta aberta`);
+    geometry.dispose();
   }
 });
 

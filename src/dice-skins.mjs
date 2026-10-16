@@ -46,7 +46,7 @@ export const SKINS = Object.freeze({
   dragonflame: Object.freeze({
     label: 'Dragonflame Red',
     accent: '#d34b40',
-    colors: [0xa70d22, 0x82091b, 0xb41429, 0x970d20],
+    colors: [0x6b0d1b, 0x710e1c, 0x690c19, 0x700d1b],
     edge: 0xeabd67,
     number: '#ffe2a1',
     roughness: .18,
@@ -60,7 +60,66 @@ export const SKINS = Object.freeze({
 });
 
 const labelCache = new Map();
+const dragonFaceCache = new Map();
 let scuffTexture;
+
+export function dragonFaceTexture(value, index, size = 256) {
+  const key = `${value}:${index % SKINS.dragonflame.colors.length}:${size}`;
+  if (dragonFaceCache.has(key)) return dragonFaceCache.get(key);
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  context.fillStyle = `#${SKINS.dragonflame.colors[index % SKINS.dragonflame.colors.length].toString(16).padStart(6, '0')}`;
+  context.fillRect(0, 0, size, size);
+  const digits = String(value).length;
+  context.font = `900 ${Math.round(size * (digits > 2 ? .18 : digits > 1 ? .23 : .28))}px system-ui`;
+  context.textAlign = 'center';
+  context.textBaseline = 'alphabetic';
+  context.lineJoin = 'round';
+  const metrics = context.measureText(String(value));
+  const baseline = (size + metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
+  context.strokeStyle = '#370711';
+  context.lineWidth = Math.max(2, size * .012);
+  context.strokeText(String(value), size / 2, baseline);
+  const gold = context.createLinearGradient(0, baseline - size * .2, 0, baseline + size * .16);
+  gold.addColorStop(0, '#fff1be');
+  gold.addColorStop(.5, '#ecc479');
+  gold.addColorStop(1, '#af7439');
+  context.fillStyle = gold;
+  context.fillText(String(value), size / 2, baseline);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  dragonFaceCache.set(key, texture);
+  return texture;
+}
+
+export function dragonFaceMaterial(value, index, dice) {
+  return new THREE.MeshPhysicalMaterial({
+    map: dragonFaceTexture(value, index, dice === 'd100' ? 128 : 256),
+    roughness: .32,
+    metalness: 0,
+    clearcoat: 0,
+    envMapIntensity: 0,
+    specularColor: 0x8f333c,
+    specularIntensity: .16,
+    side: THREE.FrontSide,
+    depthTest: true,
+    depthWrite: true,
+  });
+}
+
+export function dragonGoldMaterial() {
+  return new THREE.MeshStandardMaterial({
+    color: 0xc89b59,
+    metalness: .7,
+    roughness: .29,
+    envMapIntensity: .65,
+    side: THREE.FrontSide,
+    depthTest: true,
+    depthWrite: true,
+  });
+}
 
 function brushedTexture() {
   if (scuffTexture) return scuffTexture;
@@ -100,39 +159,14 @@ export function numberTexture(value, skin) {
   const key = `${value}:${color}`;
   if (labelCache.has(key)) return labelCache.get(key);
   const canvas = document.createElement('canvas');
-  if (skin !== 'dragonflame') {
-    canvas.width = 256;
-    canvas.height = 256;
-    const context = canvas.getContext('2d');
-    context.fillStyle = color;
-    context.font = `900 ${String(value).length > 2 ? 112 : 145}px system-ui`;
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    context.fillText(String(value), 128, 135);
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    labelCache.set(key, texture);
-    return texture;
-  }
-  canvas.width = 512;
-  canvas.height = 512;
+  canvas.width = 256;
+  canvas.height = 256;
   const context = canvas.getContext('2d');
-  const size = String(value).length > 2 ? 224 : 290;
-  context.font = `900 ${size}px system-ui`;
+  context.fillStyle = color;
+  context.font = `900 ${String(value).length > 2 ? 112 : 145}px system-ui`;
   context.textAlign = 'center';
-  context.textBaseline = 'alphabetic';
-  context.lineJoin = 'round';
-  const metrics = context.measureText(String(value));
-  const baseline = (512 + metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
-  context.strokeStyle = '#5f2310';
-  context.lineWidth = 13;
-  context.strokeText(String(value), 256, baseline);
-  const gold = context.createLinearGradient(0, baseline - size * .5, 0, baseline + size * .35);
-  gold.addColorStop(0, '#fff5c9');
-  gold.addColorStop(.42, color);
-  gold.addColorStop(1, '#b87930');
-  context.fillStyle = gold;
-  context.fillText(String(value), 256, baseline);
+  context.textBaseline = 'middle';
+  context.fillText(String(value), 128, 135);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   labelCache.set(key, texture);
