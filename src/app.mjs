@@ -2,6 +2,8 @@ import { DICE, MAX_QUANTITY, rollDice, rerollDice } from './engine.mjs';
 import { DiceView } from './dice-view.mjs';
 import { SKINS } from './dice-skins.mjs';
 
+await document.fonts.load('700 24px "Cinzel Bold"');
+
 const diceGrid = document.querySelector('#dice-grid');
 const skinPicker = document.querySelector('#skin-picker');
 const skinTrigger = document.querySelector('#skin-trigger');
@@ -255,9 +257,11 @@ function formatTime(date) {
 function renderResult(result, rerolled = false) {
   const percent = result.dice === 'dpercent' ? '%' : '';
   const label = result.dice === 'dpercent' ? 'D%' : result.dice.toUpperCase();
-  resultValue.textContent = result.quantity > 4
-    ? `${result.quantity}${label} · Total: ${result.total}${percent}`
-    : `${result.quantity > 1 ? result.quantity : ''}${label}: ${result.individual} · Total: ${result.total}${percent}`;
+  resultValue.textContent = result.dice === 'd20'
+    ? `D20: ${result.results[0].selected} • Total: ${result.total}`
+    : result.quantity > 4
+      ? `${result.quantity}${label} • Total: ${result.total}${percent}`
+      : `${result.quantity > 1 ? result.quantity : ''}${label}: ${result.individual} • Total: ${result.total}${percent}`;
   resultValue.dataset.critical = result.critical || '';
   resultValue.dataset.phase = 'final';
   resultValue.dataset.outcome = result.outcome || '';
@@ -266,7 +270,15 @@ function renderResult(result, rerolled = false) {
     : result.outcome === 'success' ? 'SUCESSO'
     : result.outcome === 'failure' ? 'FALHA'
     : rerolled ? 'RERROLAGEM' : 'ROLAGEM';
-  resultMeta.textContent = `${result.quantity > 4 ? `Dados: ${result.results.map((item) => item.selected).join(' + ')} · ` : ''}Subtotal: ${result.subtotal}${percent} · Modificador: ${signed(result.modifier)}${result.bonuses.length ? ` · Bônus: ${result.bonuses.map(signed).join(', ')}` : ''}${result.dc === null ? '' : ` · CD: ${result.dc}`} · ${result.mode}${rerolled ? ' · rerrolagem' : ''}`;
+  resultMeta.textContent = [
+    ...(result.quantity > 4 ? [`Dados: ${result.results.map((item) => item.selected).join(' + ')}`] : []),
+    `Subtotal: ${result.subtotal}${percent}`,
+    `Modificador: ${signed(result.modifier)}`,
+    ...(result.bonuses.length ? [`Bônus: ${result.bonuses.map(signed).join(', ')}`] : []),
+    ...(result.dc === null ? [] : [`CD: ${result.dc}`]),
+    result.mode,
+    ...(rerolled ? ['rerrolagem'] : []),
+  ].join(' • ');
 }
 
 function renderHistory() {
@@ -336,10 +348,10 @@ function cancelSequence() {
 function revealRaw(result) {
   const label = result.dice === 'dpercent' ? 'D%' : result.dice.toUpperCase();
   const suffix = result.dice === 'dpercent' ? '%' : '';
-  resultValue.textContent = `${result.quantity > 1 ? result.quantity : ''}${label}: ${result.results.map((item) => `${item.selected}${suffix}`).join(' + ')} · ${result.subtotal}${suffix}`;
+  resultValue.textContent = `${result.quantity > 1 ? result.quantity : ''}${label}: ${result.results.map((item) => `${item.selected}${suffix}`).join(' + ')} • ${result.subtotal}${suffix}`;
   resultValue.dataset.phase = 'raw';
   rollBadge.textContent = 'VALOR BRUTO';
-  resultMeta.textContent = result.dc === null ? 'Resultado do dado, antes dos modificadores.' : `Resultado do dado · CD ${result.dc}`;
+  resultMeta.textContent = result.dc === null ? 'Resultado do dado, antes dos modificadores.' : `Resultado do dado • CD ${result.dc}`;
 }
 
 function revealBonus(value, running, index, count, result) {
@@ -347,7 +359,7 @@ function revealBonus(value, running, index, count, result) {
   resultValue.textContent = `${running - value} ${signed(value)} = ${running}`;
   resultValue.dataset.phase = 'bonus';
   resultValue.animate([{ opacity: .3, transform: 'translateY(5px) scale(.98)' }, { opacity: 1, transform: 'translateY(0) scale(1)' }], { duration: 280, easing: 'ease-out' });
-  resultMeta.textContent = `${result.individual} · ${index + 1} de ${count} modificadores${result.dc === null ? '' : ` · CD ${result.dc}`}`;
+  resultMeta.textContent = `${result.individual} • ${index + 1} de ${count} modificadores${result.dc === null ? '' : ` • CD ${result.dc}`}`;
 }
 
 async function play(result, rerolled = false) {
@@ -362,7 +374,7 @@ async function play(result, rerolled = false) {
   resultValue.dataset.phase = 'rolling';
   resultValue.dataset.critical = '';
   resultValue.dataset.outcome = '';
-  resultMeta.textContent = `${result.dice === 'dpercent' ? 'D%' : result.dice.toUpperCase()} · lançamento em andamento${result.dc === null ? '' : ` · CD ${result.dc}`}`;
+  resultMeta.textContent = `${result.dice === 'dpercent' ? 'D%' : result.dice.toUpperCase()} • lançamento em andamento${result.dc === null ? '' : ` • CD ${result.dc}`}`;
   try {
     const completed = await view.animate(result.dice, result);
     if (!completed || sequence.cancelled) return;

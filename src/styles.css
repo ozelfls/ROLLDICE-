@@ -2,6 +2,30 @@
 @source "./index.html";
 @source "./app.mjs";
 
+@font-face {
+  font-family: "Cinzel Bold";
+  src: url("../assets/fonts/Cinzel-wght.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Inter Bold";
+  src: url("../assets/fonts/Inter-opsz-wght.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Inter Regular";
+  src: url("../assets/fonts/Inter-opsz-wght.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
 :root {
   color-scheme: dark;
   --page: #12191c;
@@ -165,10 +189,36 @@ body {
   padding: 9px 11px;
 }
 
-#result-value[data-critical='success'] { color: #07594d; }
-#result-value[data-critical='failure'] { color: #8e1a37; }
-#result-value[data-outcome='success'] { color: #07594d; }
-#result-value[data-outcome='failure'] { color: #8e1a37; }
+.result-panel {
+  border-color: rgb(247, 127, 94);
+  background: rgb(247, 127, 94);
+  color: rgb(58, 33, 28);
+  box-shadow: 0 12px 28px rgba(110, 55, 45, .15);
+}
+
+#result-heading {
+  font-family: "Cinzel Bold", "Georgia Bold", Georgia, serif;
+  font-weight: 700;
+  color: rgb(58, 33, 28);
+}
+
+#roll-badge {
+  background: rgb(230, 116, 84);
+  color: rgb(45, 27, 22);
+  font-family: "Inter Bold", Arial, sans-serif;
+}
+
+#result-value {
+  color: rgb(58, 33, 28);
+  font-family: "Inter Bold", "Arial Bold", Arial, sans-serif;
+  font-weight: 700;
+}
+
+#result-meta {
+  color: rgb(92, 60, 52);
+  font-family: "Inter Regular", Arial, sans-serif;
+  font-weight: 400;
+}
 #result-value[data-phase='raw'], #result-value[data-phase='bonus'], #result-value[data-phase='final'] { animation: reveal-pop .28s ease-out; }
 
 @keyframes reveal-pop {
@@ -179,13 +229,18 @@ body {
 .dice-stage {
   height: 205px;
   overflow: hidden;
-  border: 1px solid rgba(37, 25, 22, .18);
+  border: 1px solid rgba(58, 33, 28, .18);
   border-radius: 17px;
-  background: radial-gradient(ellipse at 50% 35%, rgba(255, 236, 190, .65), rgba(255, 180, 123, .2) 52%, rgba(93, 50, 38, .18));
+  background: linear-gradient(to bottom, rgb(248, 156, 126), rgb(242, 132, 102));
 }
 
 .dice-stage[hidden], .dice-labels[hidden] { display: none; }
-.dice-stage canvas { display: block; width: 100%; height: 100%; }
+.dice-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to bottom, rgb(248, 160, 132), rgb(244, 136, 110));
+}
 
 .dice-labels {
   display: grid;
@@ -199,14 +254,17 @@ body {
 
 .die-result-chip {
   border-radius: 7px;
-  background: rgba(37, 25, 22, .1);
+  background: rgba(230, 116, 84, .65);
   padding: 3px 5px;
-  color: #251916;
+  color: rgb(58, 33, 28);
   font-size: 11px;
   font-weight: 850;
 }
 
-.die-result-chip[data-selected='true'] { background: #d9fd62; }
+.die-result-chip[data-selected='true'] {
+  background: rgb(214, 221, 92);
+  color: rgb(45, 32, 24);
+}
 
 .history-summary { list-style: none; }
 .history-summary::-webkit-details-marker { display: none; }

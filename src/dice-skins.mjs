@@ -45,17 +45,17 @@ export const SKINS = Object.freeze({
   }),
   dragonflame: Object.freeze({
     label: 'Dragonflame Red',
-    accent: '#d34b40',
-    colors: [0x6b0d1b, 0x710e1c, 0x690c19, 0x700d1b],
-    edge: 0xeabd67,
-    number: '#ffe2a1',
+    accent: '#7a0a20',
+    colors: [0x7a0a20, 0x5e0818],
+    edge: 0xd4a84a,
+    number: '#f5e8b9',
     roughness: .18,
-    metalness: .08,
-    clearcoat: .72,
-    clearcoatRoughness: .14,
-    emissive: 0x430006,
-    emissiveIntensity: .055,
-    rim: 0xffc181,
+    metalness: .02,
+    clearcoat: .08,
+    clearcoatRoughness: .22,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
+    rim: 0xffd6aa,
   }),
 });
 
@@ -63,30 +63,29 @@ const labelCache = new Map();
 const dragonFaceCache = new Map();
 let scuffTexture;
 
-export function dragonFaceTexture(value, index, size = 256) {
-  const key = `${value}:${index % SKINS.dragonflame.colors.length}:${size}`;
+export function dragonFaceTexture(value, size = 256) {
+  const key = `${value}:${size}`;
   if (dragonFaceCache.has(key)) return dragonFaceCache.get(key);
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const context = canvas.getContext('2d');
-  context.fillStyle = `#${SKINS.dragonflame.colors[index % SKINS.dragonflame.colors.length].toString(16).padStart(6, '0')}`;
+  const faceShade = context.createLinearGradient(0, 0, size, size);
+  faceShade.addColorStop(0, 'rgb(122, 10, 32)');
+  faceShade.addColorStop(1, 'rgb(94, 8, 24)');
+  context.fillStyle = faceShade;
   context.fillRect(0, 0, size, size);
   const digits = String(value).length;
-  context.font = `900 ${Math.round(size * (digits > 2 ? .18 : digits > 1 ? .23 : .28))}px system-ui`;
+  context.font = `700 ${Math.round(size * (digits > 2 ? .18 : digits > 1 ? .23 : .28))}px "Cinzel Bold", "Trajan Pro Bold", "Times New Roman Bold", "Times New Roman"`;
   context.textAlign = 'center';
   context.textBaseline = 'alphabetic';
   context.lineJoin = 'round';
   const metrics = context.measureText(String(value));
   const baseline = (size + metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
-  context.strokeStyle = '#370711';
-  context.lineWidth = Math.max(2, size * .012);
-  context.strokeText(String(value), size / 2, baseline);
-  const gold = context.createLinearGradient(0, baseline - size * .2, 0, baseline + size * .16);
-  gold.addColorStop(0, '#fff1be');
-  gold.addColorStop(.5, '#ecc479');
-  gold.addColorStop(1, '#af7439');
-  context.fillStyle = gold;
+  context.shadowColor = 'rgb(70, 20, 18)';
+  context.shadowBlur = size * .008;
+  context.shadowOffsetY = size * .004;
+  context.fillStyle = 'rgb(245, 232, 185)';
   context.fillText(String(value), size / 2, baseline);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -94,15 +93,15 @@ export function dragonFaceTexture(value, index, size = 256) {
   return texture;
 }
 
-export function dragonFaceMaterial(value, index, dice) {
+export function dragonFaceMaterial(value, dice) {
   return new THREE.MeshPhysicalMaterial({
-    map: dragonFaceTexture(value, index, dice === 'd100' ? 128 : 256),
-    roughness: .32,
-    metalness: 0,
-    clearcoat: 0,
+    map: dragonFaceTexture(value, dice === 'd100' ? 128 : 256),
+    roughness: .18,
+    metalness: .02,
+    clearcoat: .08,
+    clearcoatRoughness: .22,
     envMapIntensity: 0,
-    specularColor: 0x8f333c,
-    specularIntensity: .16,
+    specularIntensity: .12,
     side: THREE.FrontSide,
     depthTest: true,
     depthWrite: true,
@@ -111,10 +110,10 @@ export function dragonFaceMaterial(value, index, dice) {
 
 export function dragonGoldMaterial() {
   return new THREE.MeshStandardMaterial({
-    color: 0xc89b59,
+    color: 0xd4a84a,
     metalness: .7,
-    roughness: .29,
-    envMapIntensity: .65,
+    roughness: .25,
+    envMapIntensity: .45,
     side: THREE.FrontSide,
     depthTest: true,
     depthWrite: true,

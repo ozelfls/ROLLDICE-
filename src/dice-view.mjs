@@ -14,12 +14,14 @@ function contactShadowTexture() {
   canvas.width = 128;
   canvas.height = 128;
   const context = canvas.getContext('2d');
-  const gradient = context.createRadialGradient(64, 64, 5, 64, 64, 62);
-  gradient.addColorStop(0, 'rgba(47, 20, 15, .72)');
-  gradient.addColorStop(.38, 'rgba(47, 20, 15, .38)');
-  gradient.addColorStop(1, 'rgba(47, 20, 15, 0)');
+  context.translate(64, 64);
+  context.scale(1, .62);
+  const gradient = context.createRadialGradient(0, 0, 4, 0, 0, 59);
+  gradient.addColorStop(0, 'rgba(110, 55, 45, .48)');
+  gradient.addColorStop(.42, 'rgba(110, 55, 45, .24)');
+  gradient.addColorStop(1, 'rgba(110, 55, 45, 0)');
   context.fillStyle = gradient;
-  context.fillRect(0, 0, 128, 128);
+  context.fillRect(-64, -104, 128, 208);
   contactTexture = new THREE.CanvasTexture(canvas);
   return contactTexture;
 }
@@ -47,7 +49,7 @@ function makeDie(dice, skin) {
     const materials = shape.faces.map((face, index) => {
       const points = face.vertices.map((vertex) => new THREE.Vector3(...shape.vertices[vertex]));
       faceFrames.set(face.label, faceFrame(points).quaternion);
-      return dragonFaceMaterial(face.label, index, dice);
+      return dragonFaceMaterial(face.label, dice);
     });
     materials.push(dragonGoldMaterial());
     group.add(new THREE.Mesh(beveledSurface(shape), materials));
@@ -117,13 +119,16 @@ export class DiceView {
     const rim = new THREE.DirectionalLight(0x8de9d6, 1.15);
     rim.position.set(5, 4, -6);
     this.scene.add(rim);
-    const fill = new THREE.DirectionalLight(0xffc47f, 0);
+    const fill = new THREE.DirectionalLight(0xffaa8c, 0);
     fill.position.set(4, 2, 7);
     this.scene.add(fill);
+    const dragonAmbient = new THREE.AmbientLight(0x78463c, 0);
+    this.scene.add(dragonAmbient);
     this.ambient = ambient;
     this.key = key;
     this.rim = rim;
     this.fill = fill;
+    this.dragonAmbient = dragonAmbient;
     this.skin = 'classic';
     this.stage.dataset.skin = this.skin;
     this.displayState = null;
@@ -187,10 +192,12 @@ export class DiceView {
     this.scene.environment = skin === 'dragonflame' ? this.dragonEnvironment : null;
     this.renderer.toneMapping = skin === 'dragonflame' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
     this.renderer.toneMappingExposure = skin === 'dragonflame' ? .87 : 1;
-    this.ambient.intensity = skin === 'dragonflame' ? .9 : 2.15;
-    this.key.intensity = skin === 'dragonflame' ? 1.85 : 2.2;
-    this.rim.intensity = skin === 'dragonflame' ? .95 : 1.15;
-    this.fill.intensity = skin === 'dragonflame' ? .35 : 0;
+    this.ambient.intensity = skin === 'dragonflame' ? 0 : 2.15;
+    this.dragonAmbient.intensity = skin === 'dragonflame' ? .85 : 0;
+    this.key.color.setHex(skin === 'dragonflame' ? 0xffd6aa : 0xffffff);
+    this.key.intensity = skin === 'dragonflame' ? 2.1 : 2.2;
+    this.rim.intensity = skin === 'dragonflame' ? 0 : 1.15;
+    this.fill.intensity = skin === 'dragonflame' ? .65 : 0;
     if (state) this.show(state.dice, state.quantity, state.mode, state.result, positions);
     return true;
   }
@@ -243,10 +250,10 @@ export class DiceView {
         model.group.scale.setScalar(scale);
         root.add(model.group);
         const shadow = this.skin === 'dragonflame'
-          ? new THREE.Mesh(new THREE.PlaneGeometry(scale * 2.25, scale * 2.25), new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, opacity: .58, depthWrite: false, side: THREE.DoubleSide }))
+          ? new THREE.Mesh(new THREE.PlaneGeometry(scale * 2.25, scale * 2.25), new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, opacity: .55, depthWrite: false, side: THREE.DoubleSide }))
           : new THREE.Mesh(new THREE.CircleGeometry(scale * 1.05, 32), new THREE.MeshBasicMaterial({ color: 0x552c1d, transparent: true, opacity: .13, depthWrite: false }));
         shadow.rotation.x = -Math.PI / 2;
-        shadow.position.set(root.position.x, -1.12 * scale, root.position.z);
+        shadow.position.set(root.position.x, -1.12 * scale, root.position.z + (this.skin === 'dragonflame' ? .28 * scale : 0));
         this.scene.add(root, shadow);
         const value = result?.results[slot]?.rolls[member];
         const target = finalRotation(model.faceFrames, value ?? (dice === 'dpercent' ? 10 : 1), this.camera.quaternion);
@@ -266,7 +273,7 @@ export class DiceView {
       for (const item of this.items) {
         const chosen = result.results[item.slot].selectedIndex === item.member;
         if (chosen) {
-          const ring = new THREE.Mesh(new THREE.RingGeometry(scale * .76, scale * .88, 40), new THREE.MeshBasicMaterial({ color: 0xd9fd62, transparent: true, opacity: .58, side: THREE.DoubleSide }));
+          const ring = new THREE.Mesh(new THREE.RingGeometry(scale * .76, scale * .88, 40), new THREE.MeshBasicMaterial({ color: this.skin === 'dragonflame' ? 0xd4a84a : 0xd9fd62, transparent: true, opacity: .58, side: THREE.DoubleSide }));
           ring.rotation.x = -Math.PI / 2;
           ring.position.y = -1.1 * scale;
           item.root.add(ring);
@@ -349,9 +356,9 @@ export class DiceView {
         this.renderer.domElement.style.filter = blur > .04 ? `blur(${blur.toFixed(2)}px)` : '';
         this.items.forEach((item) => {
           item.shadow.position.x = item.root.position.x;
-          item.shadow.position.z = item.root.position.z;
+          item.shadow.position.z = item.root.position.z + (this.skin === 'dragonflame' ? .28 * item.model.group.scale.x : 0);
           if (this.skin === 'dragonflame') {
-            item.shadow.material.opacity = .58 / (1 + item.root.position.y * 1.2);
+            item.shadow.material.opacity = .55 / (1 + item.root.position.y * 1.2);
             item.shadow.scale.setScalar(1 + item.root.position.y * .18);
           } else item.shadow.material.opacity = .13 / (1 + item.root.position.y * .65);
         });

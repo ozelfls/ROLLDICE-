@@ -88,6 +88,13 @@ try {
   assert.equal(await evaluate('document.querySelectorAll("#dice-grid [role=radio]").length'), 8, stderr);
   assert.equal(await evaluate('document.querySelectorAll("#skin-menu [role=menuitemradio]").length'), 4);
   assert.equal(await evaluate('document.querySelector("#dice-stage").dataset.skin'), 'classic');
+  assert.equal(await evaluate('document.fonts.check(\'700 24px "Cinzel Bold"\')'), true);
+  const resultPalette = await evaluate('({ panel: getComputedStyle(document.querySelector(".result-panel")).backgroundColor, badge: getComputedStyle(document.querySelector("#roll-badge")).backgroundColor, main: getComputedStyle(document.querySelector("#result-value")).color, secondary: getComputedStyle(document.querySelector("#result-meta")).color, stage: getComputedStyle(document.querySelector("#dice-stage canvas")).backgroundImage })');
+  assert.equal(resultPalette.panel, 'rgb(247, 127, 94)');
+  assert.equal(resultPalette.badge, 'rgb(230, 116, 84)');
+  assert.equal(resultPalette.main, 'rgb(58, 33, 28)');
+  assert.equal(resultPalette.secondary, 'rgb(92, 60, 52)');
+  assert.ok(resultPalette.stage.includes('rgb(248, 160, 132)') && resultPalette.stage.includes('rgb(244, 136, 110)'));
   const chooseSkin = async (skin) => {
     await evaluate('document.querySelector("#skin-trigger").click()');
     assert.equal(await evaluate('document.querySelector("#skin-menu").hidden'), false);
@@ -96,6 +103,7 @@ try {
     await evaluate(`document.querySelector('#skin-menu [data-value=${skin}]').click()`);
     assert.equal(await evaluate('document.querySelector("#skin-menu").hidden'), true);
     assert.equal(await evaluate('document.querySelector("#dice-stage").dataset.skin'), skin);
+    await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
   };
   await evaluate('document.querySelector("#skin-trigger").click()');
   const skinMenuShot = await client.send('Page.captureScreenshot', { format: 'png' });
@@ -116,7 +124,8 @@ try {
   }
   await chooseSkin('behir');
   const restoredBehirImage = (await client.send('Page.captureScreenshot', { format: 'png', clip: stageClip })).data;
-  assert.equal(restoredBehirImage, behirImage, 'A aparência azul mudou após selecionar a Dragonflame Red.');
+  await writeFile(path.join(folder, 'skin-behir-restored.png'), Buffer.from(restoredBehirImage, 'base64'));
+  assert.ok(restoredBehirImage === behirImage, 'A aparência azul mudou após selecionar a Dragonflame Red.');
   await chooseSkin('classic');
   assert.equal(await evaluate('document.querySelectorAll("#mode-grid [role=radio]").length'), 3);
   assert.ok(await evaluate('getComputedStyle(document.body).backgroundColor !== "rgba(0, 0, 0, 0)"'));
@@ -205,6 +214,8 @@ try {
   await writeFile(path.join(folder, 'd20-flight.png'), Buffer.from(flight.data, 'base64'));
   await waitFor('document.querySelectorAll("#history-list li").length === 11');
   assert.ok(await evaluate('document.querySelector("#result-value").textContent.includes("Total:")'));
+  assert.match(await evaluate('document.querySelector("#result-value").textContent'), /^D20: (?:[1-9]|1\d|20) • Total: -?\d+$/);
+  assert.match(await evaluate('document.querySelector("#result-meta").textContent'), /^Subtotal: \d+ • Modificador: \+3 • Bônus: \+2 • CD: 1 • normal$/);
   assert.equal(await evaluate('document.querySelector("#dice-stage canvas").style.filter'), '');
   assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), 1);
   await evaluate('document.querySelector("#mode-grid [data-value=vantagem]").click()');
