@@ -3,7 +3,10 @@ import { DiceView } from './dice-view.mjs';
 import { SKINS } from './dice-skins.mjs';
 
 const diceGrid = document.querySelector('#dice-grid');
-const skinSelect = document.querySelector('#skin-select');
+const skinPicker = document.querySelector('#skin-picker');
+const skinTrigger = document.querySelector('#skin-trigger');
+const skinTriggerLabel = document.querySelector('#skin-trigger-label');
+const skinMenu = document.querySelector('#skin-menu');
 const modeGrid = document.querySelector('#mode-grid');
 const quantityInput = document.querySelector('#quantity');
 const quantityHelp = document.querySelector('#quantity-help');
@@ -103,17 +106,39 @@ function selectMode(mode) {
   else preview();
 }
 
-function selectSkin(skin) {
-  if (state.rolling || !view.setSkin(skin)) {
-    skinSelect.value = state.skin;
-    return;
+function closeSkinMenu(focusTrigger = false) {
+  skinMenu.hidden = true;
+  skinTrigger.setAttribute('aria-expanded', 'false');
+  if (focusTrigger) skinTrigger.focus();
+}
+
+function openSkinMenu() {
+  if (state.rolling) return;
+  skinMenu.hidden = false;
+  skinTrigger.setAttribute('aria-expanded', 'true');
+  skinMenu.querySelector('[aria-checked="true"]')?.focus();
+}
+
+function renderSkinPicker() {
+  const style = SKINS[state.skin];
+  skinTriggerLabel.textContent = style.label;
+  skinTrigger.setAttribute('aria-label', `Skin dos dados: ${style.label}`);
+  skinPicker.style.setProperty('--skin-accent', style.accent);
+  for (const button of skinMenu.querySelectorAll('[role="menuitemradio"]')) {
+    button.setAttribute('aria-checked', String(button.dataset.value === state.skin));
   }
+}
+
+function selectSkin(skin) {
+  if (state.rolling || !view.setSkin(skin)) return;
   state.skin = skin;
-  skinSelect.style.setProperty('--skin-accent', SKINS[skin].accent);
+  renderSkinPicker();
+  closeSkinMenu(true);
 }
 
 function setSkinControlsEnabled(enabled) {
-  skinSelect.disabled = !enabled;
+  skinTrigger.disabled = !enabled;
+  if (!enabled) closeSkinMenu();
 }
 
 function preview() {
@@ -129,14 +154,45 @@ for (const dice of Object.keys(DICE)) {
 selectDice(state.dice);
 
 for (const [skin, style] of Object.entries(SKINS)) {
-  const option = document.createElement('option');
-  option.value = skin;
-  option.textContent = style.label;
-  skinSelect.append(option);
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'skin-option';
+  button.dataset.value = skin;
+  button.setAttribute('role', 'menuitemradio');
+  button.setAttribute('aria-checked', String(skin === state.skin));
+  button.tabIndex = -1;
+  button.style.setProperty('--skin-accent', style.accent);
+  const swatch = document.createElement('span');
+  swatch.className = 'skin-swatch';
+  swatch.style.setProperty('--skin-accent', style.accent);
+  swatch.setAttribute('aria-hidden', 'true');
+  const label = document.createElement('span');
+  label.textContent = style.label;
+  button.append(swatch, label);
+  button.addEventListener('click', () => selectSkin(skin));
+  skinMenu.append(button);
 }
-skinSelect.value = state.skin;
-skinSelect.style.setProperty('--skin-accent', SKINS[state.skin].accent);
-skinSelect.addEventListener('change', () => selectSkin(skinSelect.value));
+renderSkinPicker();
+skinTrigger.addEventListener('click', () => {
+  if (skinMenu.hidden) openSkinMenu();
+  else closeSkinMenu(true);
+});
+skinTrigger.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowDown') { event.preventDefault(); openSkinMenu(); }
+});
+skinMenu.addEventListener('keydown', (event) => {
+  if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+  event.preventDefault();
+  const buttons = [...skinMenu.querySelectorAll('button')];
+  const direction = event.key === 'ArrowDown' ? 1 : -1;
+  buttons[(buttons.indexOf(document.activeElement) + direction + buttons.length) % buttons.length].focus();
+});
+document.addEventListener('pointerdown', (event) => {
+  if (!skinPicker.contains(event.target)) closeSkinMenu();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !skinMenu.hidden) { event.preventDefault(); closeSkinMenu(true); }
+});
 
 modeGrid.setAttribute('role', 'radiogroup');
 modeGrid.setAttribute('aria-label', 'Modo de rolagem');

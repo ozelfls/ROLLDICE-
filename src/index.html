@@ -39,8 +39,14 @@
           <legend class="sr-only">Tipo de dado</legend>
           <div class="mb-3 flex items-center justify-between gap-2">
             <h2 class="text-sm font-black uppercase tracking-[.13em]">Escolha o dado</h2>
-            <label for="skin-select" class="sr-only">Skin dos dados</label>
-            <select id="skin-select" class="skin-select" aria-label="Skin dos dados"></select>
+            <div id="skin-picker" class="skin-picker">
+              <button id="skin-trigger" type="button" class="skin-trigger" aria-label="Skin dos dados: Clássico" aria-haspopup="menu" aria-expanded="false" aria-controls="skin-menu">
+                <span id="skin-trigger-swatch" class="skin-swatch" aria-hidden="true"></span>
+                <span id="skin-trigger-label" class="min-w-0 flex-1 truncate text-left">Clássico</span>
+                <span aria-hidden="true">⌄</span>
+              </button>
+              <div id="skin-menu" class="skin-menu" role="menu" aria-label="Skin dos dados" hidden></div>
+            </div>
           </div>
           <div id="dice-grid" class="grid grid-cols-4 gap-2"></div>
         </fieldset>
