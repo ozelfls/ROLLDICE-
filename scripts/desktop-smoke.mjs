@@ -254,6 +254,15 @@ try {
   assert.equal(await evaluate('document.querySelector("#history-panel").open'), true);
   await evaluate('document.querySelector("#clear-history-button").click()');
   assert.equal(await evaluate('document.querySelectorAll("#history-list li").length'), 0);
+  await chooseSkin('behir');
+  await evaluate('document.querySelector("#dice-grid [data-value=d20]").click()');
+  await evaluate('window.__previousRandom = Math.random; Math.random = () => .999999');
+  await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
+  await evaluate('Math.random = window.__previousRandom; delete window.__previousRandom');
+  await waitFor('document.querySelectorAll("#history-list li").length === 1');
+  assert.match(await evaluate('document.querySelector("#result-value").textContent'), /^D20: 20 • Total: /);
+  const blueTwenty = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+  await writeFile(path.join(folder, 'd20-behir.png'), Buffer.from(blueTwenty.data, 'base64'));
 
   console.log(`Janela e interações validadas. Captura: ${image}`);
 } finally {
