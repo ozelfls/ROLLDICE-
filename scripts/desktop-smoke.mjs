@@ -185,17 +185,26 @@ try {
   const redHundred = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
   await writeFile(path.join(folder, 'd100-dragonflame.png'), Buffer.from(redHundred.data, 'base64'));
   for (const [index, [dice, maximum]] of [['d4', 12], ['d6', 12], ['d8', 12], ['d10', 4], ['d12', 4], ['d20', 1], ['d100', 1], ['dpercent', 1]].entries()) {
-    const skin = ['scuffed', 'behir', 'dragonflame'][index % 3];
+    const skin = dice === 'd20' ? 'scuffed' : ['scuffed', 'behir', 'dragonflame'][index % 3];
     await chooseSkin(skin);
     await evaluate(`document.querySelector('#dice-grid [data-value=${dice}]').click()`);
     await evaluate(`document.querySelector('#quantity').value = '${maximum}'; document.querySelector('#quantity').dispatchEvent(new Event('input'))`);
     assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip").length'), maximum);
     assert.equal(await evaluate('document.querySelector("#quantity").max'), String(maximum));
+    if (dice === 'd20') await evaluate('window.__previousRandom = Math.random; Math.random = () => .999999');
     await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
+    if (dice === 'd20') await evaluate('Math.random = window.__previousRandom; delete window.__previousRandom');
     const expectedCount = 3 + ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100', 'dpercent'].indexOf(dice);
     await waitFor(`document.querySelectorAll('#history-list li').length === ${expectedCount}`);
     assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip[data-selected=true]").length'), maximum);
     assert.ok(await evaluate('document.querySelector("#result-value").textContent.includes("Total:")'));
+    if (dice === 'd20') {
+      assert.match(await evaluate('document.querySelector("#result-value").textContent'), /^D20: 20 • Total: /);
+      const metalHighlight = await evaluate('({ background: getComputedStyle(document.querySelector("#dice-labels .die-result-chip[data-selected=true]")).backgroundColor, text: getComputedStyle(document.querySelector("#dice-labels .die-result-chip[data-selected=true]")).color })');
+      assert.deepEqual(metalHighlight, { background: 'rgb(208, 180, 134)', text: 'rgb(45, 37, 34)' });
+      const capture = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+      await writeFile(path.join(folder, 'd20-scuffed.png'), Buffer.from(capture.data, 'base64'));
+    }
     if (dice === 'd4' || dice === 'd100') {
       const capture = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
       await writeFile(path.join(folder, `${dice}.png`), Buffer.from(capture.data, 'base64'));

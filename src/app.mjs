@@ -1,8 +1,10 @@
 import { DICE, MAX_QUANTITY, rollDice, rerollDice } from './engine.mjs';
 import { DiceView } from './dice-view.mjs';
 import { SKINS } from './dice-skins.mjs';
+import { loadScuffedFont } from './scuffed-d20.mjs';
 
 await document.fonts.load('700 24px "Cinzel Bold"');
+const scuffedFont = await loadScuffedFont().catch(() => null);
 
 const diceGrid = document.querySelector('#dice-grid');
 const skinPicker = document.querySelector('#skin-picker');
@@ -28,7 +30,7 @@ const historyEmpty = document.querySelector('#history-empty');
 const historyCount = document.querySelector('#history-count');
 const themeButton = document.querySelector('#theme-button');
 const rollButton = document.querySelector('#roll-form button[type="submit"]');
-const view = new DiceView(document.querySelector('#dice-stage'), document.querySelector('#dice-labels'));
+const view = new DiceView(document.querySelector('#dice-stage'), document.querySelector('#dice-labels'), scuffedFont);
 
 const state = {
   dice: 'd20',

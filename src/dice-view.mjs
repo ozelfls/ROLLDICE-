@@ -2,14 +2,17 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createDieShape } from './die-shapes.mjs';
 import { beveledSurface } from './die-surface.mjs';
-import { SKINS, numberTexture, faceMaterial, edgeMaterial, dragonFaceMaterial, dragonGoldMaterial } from './dice-skins.mjs';
+import { SKINS, numberTexture, faceMaterial, edgeMaterial, dragonFaceMaterial, dragonGoldMaterial, scuffedFaceMaterial, scuffedEdgeMaterial } from './dice-skins.mjs';
+import { scuffedD20Surface, scuffedD20Numbers } from './scuffed-d20.mjs';
+import { scuffedD20Materials, scuffedNumberMaterial } from './scuffed-materials.mjs';
 import { createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, settlePhysicalMotion, createSpinProfile, spinAt, PHYSICAL_PHASE, ROLL_DURATION } from './dice-motion.mjs';
 
 const shapeCache = new Map();
-let contactTexture;
+let sharedScuffedD20;
+const contactTextures = new Map();
 
-function contactShadowTexture() {
-  if (contactTexture) return contactTexture;
+function contactShadowTexture(skin) {
+  if (contactTextures.has(skin)) return contactTextures.get(skin);
   const canvas = document.createElement('canvas');
   canvas.width = 128;
   canvas.height = 128;
@@ -17,13 +20,16 @@ function contactShadowTexture() {
   context.translate(64, 64);
   context.scale(1, .62);
   const gradient = context.createRadialGradient(0, 0, 4, 0, 0, 59);
-  gradient.addColorStop(0, 'rgba(110, 55, 45, .48)');
-  gradient.addColorStop(.42, 'rgba(110, 55, 45, .24)');
-  gradient.addColorStop(1, 'rgba(110, 55, 45, 0)');
+  const color = skin === 'scuffed' ? '86, 68, 64' : '110, 55, 45';
+  gradient.addColorStop(0, `rgba(${color}, ${skin === 'scuffed' ? .67 : .48})`);
+  if (skin === 'scuffed') gradient.addColorStop(.2, `rgba(${color}, .43)`);
+  gradient.addColorStop(.42, `rgba(${color}, ${skin === 'scuffed' ? .21 : .24})`);
+  gradient.addColorStop(1, `rgba(${color}, 0)`);
   context.fillStyle = gradient;
   context.fillRect(-64, -104, 128, 208);
-  contactTexture = new THREE.CanvasTexture(canvas);
-  return contactTexture;
+  const texture = new THREE.CanvasTexture(canvas);
+  contactTextures.set(skin, texture);
+  return texture;
 }
 
 function modelFor(dice) {
@@ -41,18 +47,51 @@ export function faceFrame(points) {
   return { right, up, normal, quaternion };
 }
 
-function makeDie(dice, skin) {
+function makeDie(dice, skin, scuffedFont) {
   const shape = modelFor(dice);
   const group = new THREE.Group();
   const faceFrames = new Map();
-  if (skin === 'dragonflame') {
+  if (skin === 'scuffed' && dice === 'd20' && scuffedFont) {
+    if (!sharedScuffedD20) {
+      const frames = new Map(shape.faces.map((face) => {
+        const points = face.vertices.map((vertex) => new THREE.Vector3(...shape.vertices[vertex]));
+        return [face.label, faceFrame(points).quaternion];
+      }));
+      sharedScuffedD20 = {
+        body: scuffedD20Surface(shape),
+        numbers: scuffedD20Numbers(shape, scuffedFont),
+        materials: scuffedD20Materials(),
+        numberMaterial: scuffedNumberMaterial(),
+        faceFrames: frames,
+      };
+    }
+    const body = new THREE.Mesh(sharedScuffedD20.body, sharedScuffedD20.materials);
+    const numbers = new THREE.Mesh(sharedScuffedD20.numbers, sharedScuffedD20.numberMaterial);
+    body.userData.shared = true;
+    numbers.userData.shared = true;
+    group.add(body, numbers);
+    return { group, faceFrames: sharedScuffedD20.faceFrames };
+  }
+  if (skin === 'dragonflame' || skin === 'scuffed') {
     const materials = shape.faces.map((face, index) => {
       const points = face.vertices.map((vertex) => new THREE.Vector3(...shape.vertices[vertex]));
       faceFrames.set(face.label, faceFrame(points).quaternion);
-      return dragonFaceMaterial(face.label, dice);
+      return skin === 'scuffed' ? scuffedFaceMaterial(face.label, index, dice) : dragonFaceMaterial(face.label, dice);
     });
-    materials.push(dragonGoldMaterial());
-    group.add(new THREE.Mesh(beveledSurface(shape), materials));
+    if (skin === 'scuffed') {
+      materials.push(scuffedEdgeMaterial(0xb2b6c2), scuffedEdgeMaterial(0xd6d9e1), scuffedEdgeMaterial(0x5e6270));
+    } else materials.push(dragonGoldMaterial());
+    const geometry = beveledSurface(shape, skin === 'scuffed' ? .105 : .075);
+    if (skin === 'scuffed') {
+      const normals = geometry.getAttribute('normal');
+      const light = new THREE.Vector3(-3, 8, 5).normalize();
+      for (const segment of geometry.groups.slice(shape.faces.length)) {
+        const normal = new THREE.Vector3().fromBufferAttribute(normals, segment.start);
+        const angle = normal.dot(light);
+        segment.materialIndex = shape.faces.length + (angle > .25 ? 1 : angle < -.25 ? 2 : 0);
+      }
+    }
+    group.add(new THREE.Mesh(geometry, materials));
     return { group, faceFrames };
   }
   shape.faces.forEach((face, index) => {
@@ -98,9 +137,10 @@ export function finalRotation(faceFrames, value, cameraQuaternion) {
 }
 
 export class DiceView {
-  constructor(stage, labels) {
+  constructor(stage, labels, scuffedFont = null) {
     this.stage = stage;
     this.labels = labels;
+    this.scuffedFont = scuffedFont;
     this.scene = new THREE.Scene();
     this.camera = new THREE.OrthographicCamera(-5, 5, 4, -4, .1, 100);
     this.camera.position.set(0, 13, 7);
@@ -111,6 +151,7 @@ export class DiceView {
     this.renderer.setClearColor(0x000000, 0);
     this.stage.append(this.renderer.domElement);
     this.dragonEnvironment = null;
+    this.scuffedEnvironment = null;
     const ambient = new THREE.HemisphereLight(0xffffff, 0x7d4e37, 2.15);
     this.scene.add(ambient);
     const key = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -124,11 +165,14 @@ export class DiceView {
     this.scene.add(fill);
     const dragonAmbient = new THREE.AmbientLight(0x78463c, 0);
     this.scene.add(dragonAmbient);
+    const scuffedAmbient = new THREE.AmbientLight(0x4c4a4a, 0);
+    this.scene.add(scuffedAmbient);
     this.ambient = ambient;
     this.key = key;
     this.rim = rim;
     this.fill = fill;
     this.dragonAmbient = dragonAmbient;
+    this.scuffedAmbient = scuffedAmbient;
     this.skin = 'classic';
     this.stage.dataset.skin = this.skin;
     this.displayState = null;
@@ -165,6 +209,13 @@ export class DiceView {
       item.shadow.geometry.dispose();
       item.shadow.material.dispose();
       item.root.traverse((part) => {
+        if (part.userData.shared) {
+          if (part.userData.ownedMaterials) {
+            if (Array.isArray(part.material)) part.material.forEach((material) => material.dispose());
+            else part.material.dispose();
+          }
+          return;
+        }
         part.geometry?.dispose();
         if (Array.isArray(part.material)) part.material.forEach((material) => material.dispose());
         else part.material?.dispose();
@@ -181,23 +232,26 @@ export class DiceView {
     const positions = this.items.map((item) => ({ x: item.root.position.x, z: item.root.position.z }));
     this.skin = skin;
     this.stage.dataset.skin = skin;
-    this.rim.color.setHex(SKINS[skin].rim);
-    if (skin === 'dragonflame' && !this.dragonEnvironment) {
+    this.rim.color.setHex(skin === 'scuffed' ? 0xd2cec6 : SKINS[skin].rim);
+    const environmentKey = skin === 'dragonflame' ? 'dragonEnvironment' : skin === 'scuffed' ? 'scuffedEnvironment' : null;
+    if (environmentKey && !this[environmentKey]) {
       const environment = new RoomEnvironment();
       const pmrem = new THREE.PMREMGenerator(this.renderer);
-      this.dragonEnvironment = pmrem.fromScene(environment).texture;
+      this[environmentKey] = pmrem.fromScene(environment).texture;
       pmrem.dispose();
       environment.dispose();
     }
-    this.scene.environment = skin === 'dragonflame' ? this.dragonEnvironment : null;
-    this.renderer.toneMapping = skin === 'dragonflame' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
-    this.renderer.toneMappingExposure = skin === 'dragonflame' ? .87 : 1;
-    this.ambient.intensity = skin === 'dragonflame' ? 0 : 2.15;
+    this.scene.environment = environmentKey ? this[environmentKey] : null;
+    this.renderer.toneMapping = skin === 'dragonflame' || skin === 'scuffed' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+    this.renderer.toneMappingExposure = skin === 'dragonflame' ? .87 : skin === 'scuffed' ? .84 : 1;
+    this.ambient.intensity = skin === 'dragonflame' || skin === 'scuffed' ? 0 : 2.15;
     this.dragonAmbient.intensity = skin === 'dragonflame' ? .85 : 0;
-    this.key.color.setHex(skin === 'dragonflame' ? 0xffd6aa : 0xffffff);
-    this.key.intensity = skin === 'dragonflame' ? 2.1 : 2.2;
-    this.rim.intensity = skin === 'dragonflame' ? 0 : 1.15;
-    this.fill.intensity = skin === 'dragonflame' ? .65 : 0;
+    this.scuffedAmbient.intensity = skin === 'scuffed' ? .8 : 0;
+    this.key.color.setHex(skin === 'dragonflame' ? 0xffd6aa : skin === 'scuffed' ? 0xece4d8 : 0xffffff);
+    this.key.intensity = skin === 'dragonflame' ? 2.1 : skin === 'scuffed' ? 1.9 : 2.2;
+    this.rim.intensity = skin === 'dragonflame' ? 0 : skin === 'scuffed' ? 1.16 : 1.15;
+    this.fill.color.setHex(skin === 'scuffed' ? 0xaab0ba : 0xffaa8c);
+    this.fill.intensity = skin === 'dragonflame' ? .65 : skin === 'scuffed' ? .72 : 0;
     if (state) this.show(state.dice, state.quantity, state.mode, state.result, positions);
     return true;
   }
@@ -243,17 +297,18 @@ export class DiceView {
       const centerX = (column - (inRow - 1) / 2) * xStep;
       const centerZ = (row - (rows - 1) / 2) * zStep;
       for (let member = 0; member < (pair ? 2 : 1); member++) {
-        const model = makeDie(dice, this.skin);
+        const model = makeDie(dice, this.skin, this.scuffedFont);
         const root = new THREE.Group();
         const placement = positions?.[this.items.length];
         root.position.set(placement?.x ?? centerX + (pair ? (member - .5) * scale * (dice === 'd100' ? 2.1 : 1.75) : 0), 0, placement?.z ?? centerZ);
         model.group.scale.setScalar(scale);
         root.add(model.group);
-        const shadow = this.skin === 'dragonflame'
-          ? new THREE.Mesh(new THREE.PlaneGeometry(scale * 2.25, scale * 2.25), new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, opacity: .55, depthWrite: false, side: THREE.DoubleSide }))
+        const contactShadow = this.skin === 'dragonflame' || this.skin === 'scuffed';
+        const shadow = contactShadow
+          ? new THREE.Mesh(new THREE.PlaneGeometry(scale * 2.25, scale * 2.25), new THREE.MeshBasicMaterial({ map: contactShadowTexture(this.skin), transparent: true, opacity: this.skin === 'scuffed' ? .6 : .55, depthWrite: false, side: THREE.DoubleSide }))
           : new THREE.Mesh(new THREE.CircleGeometry(scale * 1.05, 32), new THREE.MeshBasicMaterial({ color: 0x552c1d, transparent: true, opacity: .13, depthWrite: false }));
         shadow.rotation.x = -Math.PI / 2;
-        shadow.position.set(root.position.x, -1.12 * scale, root.position.z + (this.skin === 'dragonflame' ? .28 * scale : 0));
+        shadow.position.set(root.position.x, -1.12 * scale, root.position.z + (this.skin === 'scuffed' ? .48 * scale : contactShadow ? .28 * scale : 0));
         this.scene.add(root, shadow);
         const value = result?.results[slot]?.rolls[member];
         const target = finalRotation(model.faceFrames, value ?? (dice === 'dpercent' ? 10 : 1), this.camera.quaternion);
@@ -273,15 +328,20 @@ export class DiceView {
       for (const item of this.items) {
         const chosen = result.results[item.slot].selectedIndex === item.member;
         if (chosen) {
-          const ring = new THREE.Mesh(new THREE.RingGeometry(scale * .76, scale * .88, 40), new THREE.MeshBasicMaterial({ color: this.skin === 'dragonflame' ? 0xd4a84a : 0xd9fd62, transparent: true, opacity: .58, side: THREE.DoubleSide }));
+          const ring = new THREE.Mesh(new THREE.RingGeometry(scale * .76, scale * .88, 40), new THREE.MeshBasicMaterial({ color: this.skin === 'dragonflame' ? 0xd4a84a : this.skin === 'scuffed' ? 0xb2b6c2 : 0xd9fd62, transparent: true, opacity: this.skin === 'scuffed' ? .25 : .58, side: THREE.DoubleSide }));
           ring.rotation.x = -Math.PI / 2;
+          if (this.skin === 'scuffed') ring.scale.y = .65;
           ring.position.y = -1.1 * scale;
           item.root.add(ring);
         } else item.model.group.traverse((part) => {
+          if (part.userData.shared && !part.userData.ownedMaterials) {
+            part.material = Array.isArray(part.material) ? part.material.map((material) => material.clone()) : part.material.clone();
+            part.userData.ownedMaterials = true;
+          }
           const materials = Array.isArray(part.material) ? part.material : [part.material];
           for (const material of materials) {
             if (material?.isMeshStandardMaterial) {
-              material.color.lerp(new THREE.Color(0x9b8377), .62);
+              material.color.lerp(new THREE.Color(this.skin === 'scuffed' ? 0x494c5c : 0x9b8377), .62);
               material.emissiveIntensity *= .35;
             }
             if (material?.isMeshBasicMaterial || material?.isLineBasicMaterial) material.opacity = .45;
@@ -356,9 +416,9 @@ export class DiceView {
         this.renderer.domElement.style.filter = blur > .04 ? `blur(${blur.toFixed(2)}px)` : '';
         this.items.forEach((item) => {
           item.shadow.position.x = item.root.position.x;
-          item.shadow.position.z = item.root.position.z + (this.skin === 'dragonflame' ? .28 * item.model.group.scale.x : 0);
-          if (this.skin === 'dragonflame') {
-            item.shadow.material.opacity = .55 / (1 + item.root.position.y * 1.2);
+          item.shadow.position.z = item.root.position.z + (this.skin === 'scuffed' ? .48 * item.model.group.scale.x : this.skin === 'dragonflame' ? .28 * item.model.group.scale.x : 0);
+          if (this.skin === 'dragonflame' || this.skin === 'scuffed') {
+            item.shadow.material.opacity = (this.skin === 'scuffed' ? .6 : .55) / (1 + item.root.position.y * 1.2);
             item.shadow.scale.setScalar(1 + item.root.position.y * .18);
           } else item.shadow.material.opacity = .13 / (1 + item.root.position.y * .65);
         });

@@ -46,7 +46,7 @@ test('faces opostas do D20 somam vinte e um', () => {
   }
 });
 
-test('a superfície chanfrada vermelha fecha todos os formatos sem faces invertidas', () => {
+test('a superfície chanfrada fecha todos os formatos sem faces invertidas', () => {
   for (const dice of Object.keys(counts)) {
     const shape = createDieShape(dice);
     const geometry = beveledSurface(shape);
@@ -97,7 +97,7 @@ test('cada resultado do D20 termina voltado e alinhado para a câmera', () => {
 });
 
 test('movimento termina estável entre um e meio e dois e meio segundos', () => {
-  assert.ok(ROLL_DURATION >= 1500 && ROLL_DURATION <= 2500);
+  assert.ok(ROLL_DURATION >= 1600 && ROLL_DURATION <= 2200);
   const body = { x: 2.5, y: .4, z: -.6, vx: .7, vz: -.3, xLimit: 4, zLimit: 1.5 };
   assert.deepEqual(settlePhysicalMotion(body, 0), { x: 2.5, y: .4, z: -.6 });
   const end = settlePhysicalMotion(body, 1);

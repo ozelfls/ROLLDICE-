@@ -266,6 +266,11 @@ body {
   color: rgb(45, 32, 24);
 }
 
+.dice-stage[data-skin='scuffed'] + .dice-labels .die-result-chip[data-selected='true'] {
+  background: rgb(208, 180, 134);
+  color: rgb(45, 37, 34);
+}
+
 .history-summary { list-style: none; }
 .history-summary::-webkit-details-marker { display: none; }
 .history-chevron { display: inline-block; transition: transform .18s ease; }

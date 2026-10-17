@@ -55,7 +55,7 @@ export function beveledSurface(shape, inset = .075) {
   for (const [key, pair] of edges) {
     if (pair.length !== 2) throw new Error(`Aresta aberta: ${key}`);
     const [a, b] = key.split(':').map(Number);
-    addPolygon([pair[0].get(a), pair[0].get(b), pair[1].get(b), pair[1].get(a)], [[0, 0], [0, 0], [0, 0], [0, 0]], goldIndex);
+    addPolygon([pair[0].get(a), pair[0].get(b), pair[1].get(b), pair[1].get(a)], [[0, 0], [1, 0], [1, 1], [0, 1]], goldIndex);
   }
   for (const [index, corners] of cornersByVertex.entries()) {
     const axis = new THREE.Vector3(...shape.vertices[index]).normalize();
