@@ -82,6 +82,35 @@ try {
   assert.match(await evaluate('document.querySelector("#result-value").textContent'), /^D20: 20 • Total: /);
   const rolled = (await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })).data;
   await writeFile(path.join(folder, 'lightning-rolled.png'), Buffer.from(rolled, 'base64'));
+  await evaluate('window.__previousRandom = Math.random; Math.random = () => .875; document.querySelector("#roll-form button[type=submit]").click(); Math.random = window.__previousRandom; delete window.__previousRandom');
+  await waitFor('document.querySelectorAll("#history-list li").length === 2');
+  assert.match(await evaluate('document.querySelector("#result-value").textContent'), /^D20: 18 . Total: /);
+  const eighteen = (await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })).data;
+  await writeFile(path.join(folder, 'lightning-18.png'), Buffer.from(eighteen, 'base64'));
+  for (const [index, skin] of ['scuffed', 'behir', 'dragonflame'].entries()) {
+    await evaluate(`document.querySelector('#skin-trigger').click(); document.querySelector('#skin-menu [data-value=${skin}]').click()`);
+    await delay(450);
+    await evaluate('window.__previousRandom = Math.random; Math.random = () => .875; document.querySelector("#roll-form button[type=submit]").click(); Math.random = window.__previousRandom; delete window.__previousRandom');
+    await waitFor(`document.querySelectorAll("#history-list li").length === ${index + 3}`);
+    assert.match(await evaluate('document.querySelector("#result-value").textContent'), /^D20: 18 . Total: /);
+    const image = (await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })).data;
+    await writeFile(path.join(folder, `${skin}-18.png`), Buffer.from(image, 'base64'));
+  }
+  if (process.argv.includes('--audit-numbers')) {
+    let historyCount = 5;
+    for (const skin of ['behir', 'dragonflame']) {
+      await evaluate(`document.querySelector('#skin-trigger').click(); document.querySelector('#skin-menu [data-value=${skin}]').click()`);
+      await delay(450);
+      for (let value = 1; value <= 20; value++) {
+        await evaluate(`window.__previousRandom = Math.random; Math.random = () => ${(value - .5) / 20}; document.querySelector('#roll-form button[type=submit]').click(); Math.random = window.__previousRandom; delete window.__previousRandom; document.querySelector('#roll-form button[type=submit]').click()`);
+        historyCount++;
+        await waitFor(`document.querySelectorAll("#history-list li").length === ${historyCount}`);
+        const clip = await evaluate('(() => { const { x, y, width, height } = document.querySelector("#dice-stage").getBoundingClientRect(); return { x, y, width, height, scale: 1 }; })()');
+        const image = (await send('Page.captureScreenshot', { format: 'png', clip })).data;
+        await writeFile(path.join(folder, `${skin}-${String(value).padStart(2, '0')}.png`), Buffer.from(image, 'base64'));
+      }
+    }
+  }
   console.log(`Skins e D20 validados. Fonte Dragonflame: ${dragonFamily}. Capturas: ${folder}`);
 } finally {
   socket?.close();

@@ -18,9 +18,13 @@ test('Lightning Storm monta o D20 translúcido com veios internos e números esc
   const veins = lightningD20Veins();
   const veinMaterials = lightningD20VeinMaterials(shape, pulse);
   const numbers = lightningD20Numbers(shape, font);
-  const zero = numeralShapes(font, '0', false)[0];
-  assert.equal(zero.holes.length, 1);
-  assert.ok(Math.abs(THREE.ShapeUtils.area(zero.getPoints(12))) > Math.abs(THREE.ShapeUtils.area(zero.holes[0].getPoints(12))));
+  for (const [digit, holes] of [['0', 1], ['6', 1], ['8', 2], ['9', 1]]) {
+    const shapes = numeralShapes(font, digit, false);
+    assert.equal(shapes.length, 1, `Contorno de ${digit}`);
+    assert.equal(shapes[0].holes.length, holes, `Furos de ${digit}`);
+    const outerArea = Math.abs(THREE.ShapeUtils.area(shapes[0].getPoints(12)));
+    assert.ok(shapes[0].holes.every((hole) => outerArea > Math.abs(THREE.ShapeUtils.area(hole.getPoints(12)))), `Área de ${digit}`);
+  }
   const numberMaterials = lightningD20NumberMaterials(shape);
   assert.ok(shell.getAttribute('position').count > 0);
   assert.ok(shellMaterial.transmission >= .45);

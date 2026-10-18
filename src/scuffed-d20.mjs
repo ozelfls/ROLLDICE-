@@ -113,6 +113,37 @@ export function scuffedD20Surface(shape) {
   return geometry;
 }
 
+function enclosesContour(outline, point) {
+  let inside = false;
+  for (let index = 0, previous = outline.length - 1; index < outline.length; previous = index++) {
+    const a = outline[index];
+    const b = outline[previous];
+    if ((a.y > point.y) !== (b.y > point.y) && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+function nestedNumeralShapes(path) {
+  const contours = path.subPaths.map((subPath) => {
+    const points = subPath.getPoints(12);
+    return { path: subPath, points, area: Math.abs(THREE.ShapeUtils.area(points)), depth: 0, parent: null, shape: null };
+  }).filter((contour) => contour.area > 0.000001).sort((a, b) => b.area - a.area);
+  for (const contour of contours) {
+    let parent = null;
+    for (const candidate of contours) {
+      if (candidate.area <= contour.area || !enclosesContour(candidate.points, contour.points[0])) continue;
+      if (!parent || candidate.area < parent.area) parent = candidate;
+    }
+    contour.parent = parent;
+    contour.depth = parent ? parent.depth + 1 : 0;
+    if (contour.depth % 2 === 0) {
+      contour.shape = new THREE.Shape();
+      contour.shape.curves = contour.path.curves;
+    } else parent.shape.holes.push(contour.path);
+  }
+  return contours.filter((contour) => contour.shape).map((contour) => contour.shape);
+}
+
 export function numeralShapes(font, value, isCCW = true) {
   const shapes = [];
   let offset = 0;
@@ -126,7 +157,7 @@ export function numeralShapes(font, value, isCCW = true) {
       else if (command.type === 'C') path.bezierCurveTo(command.x1, -command.y1, command.x2, -command.y2, command.x, -command.y);
       else if (command.type === 'Z') path.currentPath.closePath();
     }
-    shapes.push(...path.toShapes(isCCW));
+    shapes.push(...(isCCW === 'nested' ? nestedNumeralShapes(path) : path.toShapes(isCCW)));
     offset += font.getAdvanceWidth(digit, 1);
   }
   return shapes;

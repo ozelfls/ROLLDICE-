@@ -155,7 +155,7 @@ export function dragonD20Numbers(shape, font) {
     const normal = new THREE.Vector3().crossVectors(points[1].clone().sub(points[0]), points[2].clone().sub(points[0])).normalize();
     const up = new THREE.Vector3().crossVectors(normal, right).normalize();
     const edge = points[0].distanceTo(points[1]);
-    const shapes = numeralShapes(font, face.label);
+    const shapes = numeralShapes(font, face.label, 'nested');
     if (!shapes.length) throw new Error(`Contorno Cinzel ausente: ${face.label}`);
     const bounds = new THREE.ShapeGeometry(shapes, 5);
     bounds.computeBoundingBox();
@@ -205,6 +205,6 @@ export function dragonD20Numbers(shape, font) {
 export function dragonD20NumberMaterials() {
   return {
     groove: new THREE.MeshPhysicalMaterial({ color: 0x6e4812, metalness: .4, roughness: .5, transparent: true, opacity: 1, depthTest: true, depthWrite: true, side: THREE.FrontSide }),
-    gold: new THREE.MeshPhysicalMaterial({ color: 0xffffff, vertexColors: true, metalness: .7, roughness: .34, specularColor: 0xffd770, specularIntensity: .75, transparent: true, opacity: 1, depthTest: true, depthWrite: true, side: THREE.FrontSide }),
+    gold: new THREE.MeshPhysicalMaterial({ color: 0xffffff, vertexColors: true, metalness: .7, roughness: .34, specularColor: 0xffd770, specularIntensity: .75, emissive: 0xe0aa46, emissiveIntensity: .1, transparent: true, opacity: 1, depthTest: true, depthWrite: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, side: THREE.FrontSide }),
   };
 }
