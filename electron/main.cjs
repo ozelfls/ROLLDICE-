@@ -1,5 +1,23 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('node:path');
+const fs = require('node:fs/promises');
+
+ipcMain.handle('dice-font:dragon', async () => {
+  const projectFonts = path.join(__dirname, '..', 'assets', 'fonts');
+  const systemFonts = process.platform === 'win32' ? path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts') : '/Library/Fonts';
+  const installedTrajan = (await fs.readdir(systemFonts).catch(() => [])).filter((name) => /trajan.*(?:bold|bd).*\.(?:otf|ttf)$/i.test(name));
+  const candidates = [
+    ['Trajan Pro Bold', path.join(projectFonts, 'TrajanPro-Bold.otf')],
+    ['Trajan Pro Bold', path.join(projectFonts, 'TrajanPro-Bold.ttf')],
+    ...installedTrajan.map((name) => ['Trajan Pro Bold', path.join(systemFonts, name)]),
+    ['Palatino Linotype Bold', path.join(systemFonts, 'palab.ttf')],
+    ['Times New Roman Bold', path.join(systemFonts, process.platform === 'win32' ? 'timesbd.ttf' : 'Times New Roman Bold.ttf')],
+  ];
+  for (const [family, file] of candidates) {
+    try { return { family, data: await fs.readFile(file) }; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+  throw new Error('Nenhuma fonte Dragonflame disponível.');
+});
 
 function createWindow() {
   const window = new BrowserWindow({
@@ -12,6 +30,7 @@ function createWindow() {
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,

@@ -1,9 +1,10 @@
 import * as THREE from 'three';
+import { DICE_TYPOGRAPHY, numeralCanvasFont } from './dice-typography.mjs';
 
 export const SKINS = Object.freeze({
   classic: Object.freeze({
-    label: 'Clássico',
-    accent: '#e2b969',
+    label: 'Lightning Storm',
+    accent: '#ffcf2b',
     colors: [0xffe5b0, 0xffd489, 0xf9c774, 0xffe9bf],
     edge: 0x8c5c41,
     number: '#31251e',
@@ -113,7 +114,7 @@ function scuffedFaceMaps(value, index, size = 256) {
     draw(bump, line % 3 === 0 ? 'rgb(86, 86, 86)' : 'rgb(170, 170, 170)', line % 5 === 0 ? 12 : 7);
   }
   const digits = String(value).length;
-  context.font = `700 ${Math.round(size * (digits > 2 ? .18 : digits > 1 ? .23 : .28))}px "Cinzel Bold", "Trajan Pro Bold", "Times New Roman Bold", "Times New Roman"`;
+  context.font = numeralCanvasFont('scuffed', size * (digits > 2 ? .18 : digits > 1 ? .23 : .28));
   context.textAlign = 'center';
   context.textBaseline = 'alphabetic';
   const metrics = context.measureText(String(value));
@@ -247,16 +248,16 @@ export function dragonFaceTexture(value, size = 256) {
   context.fillStyle = faceShade;
   context.fillRect(0, 0, size, size);
   const digits = String(value).length;
-  context.font = `700 ${Math.round(size * (digits > 2 ? .18 : digits > 1 ? .23 : .28))}px "Cinzel Bold", "Trajan Pro Bold", "Times New Roman Bold", "Times New Roman"`;
+  context.font = numeralCanvasFont('dragonflame', size * (digits > 2 ? .18 : digits > 1 ? .23 : .28));
   context.textAlign = 'center';
   context.textBaseline = 'alphabetic';
   context.lineJoin = 'round';
   const metrics = context.measureText(String(value));
   const baseline = (size + metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
-  context.shadowColor = 'rgb(70, 20, 18)';
+  context.shadowColor = 'rgb(156, 108, 33)';
   context.shadowBlur = size * .008;
   context.shadowOffsetY = size * .004;
-  context.fillStyle = 'rgb(245, 232, 185)';
+  context.fillStyle = DICE_TYPOGRAPHY.dragonflame.number;
   context.fillText(String(value), size / 2, baseline);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -292,15 +293,15 @@ export function dragonGoldMaterial() {
 }
 
 export function numberTexture(value, skin) {
-  const color = SKINS[skin].number;
-  const key = `${value}:${color}`;
+  const color = DICE_TYPOGRAPHY[skin].number;
+  const key = `${skin}:${value}:${color}`;
   if (labelCache.has(key)) return labelCache.get(key);
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 256;
   const context = canvas.getContext('2d');
   context.fillStyle = color;
-  context.font = `900 ${String(value).length > 2 ? 112 : 145}px system-ui`;
+  context.font = numeralCanvasFont(skin, String(value).length > 2 ? 112 : 145);
   context.textAlign = 'center';
   context.textBaseline = 'middle';
   context.fillText(String(value), 128, 135);

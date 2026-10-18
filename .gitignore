@@ -2,3 +2,5 @@ node_modules/
 dist/
 *.log
 character_data.json
+assets/fonts/TrajanPro-Bold.otf
+assets/fonts/TrajanPro-Bold.ttf

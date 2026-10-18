@@ -113,7 +113,7 @@ export function scuffedD20Surface(shape) {
   return geometry;
 }
 
-export function numeralShapes(font, value) {
+export function numeralShapes(font, value, isCCW = true) {
   const shapes = [];
   let offset = 0;
   for (const digit of String(value)) {
@@ -126,7 +126,7 @@ export function numeralShapes(font, value) {
       else if (command.type === 'C') path.bezierCurveTo(command.x1, -command.y1, command.x2, -command.y2, command.x, -command.y);
       else if (command.type === 'Z') path.currentPath.closePath();
     }
-    shapes.push(...path.toShapes(true));
+    shapes.push(...path.toShapes(isCCW));
     offset += font.getAdvanceWidth(digit, 1);
   }
   return shapes;

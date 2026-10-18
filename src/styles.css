@@ -11,6 +11,38 @@
 }
 
 @font-face {
+  font-family: "Rajdhani Bold";
+  src: url("../assets/fonts/Rajdhani-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Oxanium Bold";
+  src: url("../assets/fonts/Oxanium-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Exo 2 ExtraBold";
+  src: url("../assets/fonts/Exo2-ExtraBold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 800;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Caudex Bold";
+  src: url("../assets/fonts/Caudex-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+}
+
+@font-face {
   font-family: "Inter Bold";
   src: url("../assets/fonts/Inter-opsz-wght.ttf") format("truetype");
   font-style: normal;

@@ -112,6 +112,10 @@ try {
   await evaluate('document.querySelector("#skin-trigger").click()');
   const stageClip = await evaluate('(() => { const { x, y, width, height } = document.querySelector("#dice-stage").getBoundingClientRect(); return { x, y, width, height, scale: 1 }; })()');
   let previousSkinImage = (await client.send('Page.captureScreenshot', { format: 'png', clip: stageClip })).data;
+  assert.equal(await evaluate('document.querySelector("#skin-trigger-label").textContent'), 'Lightning Storm');
+  assert.equal(await evaluate(`document.fonts.check('700 24px "Caudex Bold"')`), true);
+  assert.ok(['Trajan Pro Bold', 'Palatino Linotype Bold', 'Times New Roman Bold'].includes(await evaluate('window.diceFonts.loadDragonFont().then((font) => font.family)')));
+  await writeFile(path.join(folder, 'skin-lightning.png'), Buffer.from(previousSkinImage, 'base64'));
   let behirImage;
   for (const skin of ['scuffed', 'behir', 'dragonflame']) {
     await chooseSkin(skin);
@@ -263,6 +267,17 @@ try {
   assert.match(await evaluate('document.querySelector("#result-value").textContent'), /^D20: 20 • Total: /);
   const blueTwenty = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
   await writeFile(path.join(folder, 'd20-behir.png'), Buffer.from(blueTwenty.data, 'base64'));
+
+  await chooseSkin('classic');
+  assert.equal(await evaluate(`document.fonts.check('700 24px "Rajdhani Bold"')`), true);
+  await evaluate('window.__previousRandom = Math.random; Math.random = () => .999999');
+  await evaluate('document.querySelector("#roll-form button[type=submit]").click()');
+  await evaluate('Math.random = window.__previousRandom; delete window.__previousRandom');
+  await waitFor('document.querySelectorAll("#history-list li").length === 2');
+  assert.match(await evaluate('document.querySelector("#result-value").textContent'), /^D20: 20 • Total: /);
+  assert.equal(await evaluate('document.querySelectorAll("#dice-labels .die-result-chip[data-selected=true]").length'), 1);
+  const lightningTwenty = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+  await writeFile(path.join(folder, 'd20-lightning.png'), Buffer.from(lightningTwenty.data, 'base64'));
 
   console.log(`Janela e interações validadas. Captura: ${image}`);
 } finally {

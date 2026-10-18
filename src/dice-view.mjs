@@ -7,12 +7,14 @@ import { scuffedD20Surface, scuffedD20Numbers } from './scuffed-d20.mjs';
 import { scuffedD20Materials, scuffedNumberMaterial } from './scuffed-materials.mjs';
 import { behirD20Surface, behirD20Material, behirD20Core, behirD20CoreMaterial, behirD20Numbers, behirD20NumberMaterials } from './behir-d20.mjs';
 import { dragonD20Surface, dragonD20Material, dragonD20Core, dragonD20CoreMaterial, dragonD20Numbers, dragonD20NumberMaterials } from './dragon-d20.mjs';
+import { lightningD20Surface, lightningD20Material, lightningD20Pulse, lightningD20Veins, lightningD20VeinMaterials, lightningD20Numbers, lightningD20NumberMaterials } from './lightning-d20.mjs';
 import { createPhysicalMotion, stepPhysicalMotion, resolvePhysicalCollisions, settlePhysicalMotion, createSpinProfile, spinAt, PHYSICAL_PHASE, ROLL_DURATION } from './dice-motion.mjs';
 
 const shapeCache = new Map();
 let sharedScuffedD20;
 let sharedBehirD20;
 let sharedDragonD20;
+let sharedLightningD20;
 const contactTextures = new Map();
 
 function contactShadowTexture(skin) {
@@ -24,7 +26,7 @@ function contactShadowTexture(skin) {
   context.translate(64, 64);
   context.scale(1, .62);
   const gradient = context.createRadialGradient(0, 0, 4, 0, 0, 59);
-  const color = skin === 'scuffed' ? '86, 68, 64' : skin === 'behir' ? '115, 88, 92' : skin === 'dragonD20' ? '82, 48, 42' : '110, 55, 45';
+  const color = skin === 'scuffed' ? '86, 68, 64' : skin === 'behir' ? '115, 88, 92' : skin === 'dragonD20' ? '82, 48, 42' : skin === 'lightningD20' ? '92, 70, 26' : '110, 55, 45';
   gradient.addColorStop(0, `rgba(${color}, ${skin === 'scuffed' ? .67 : .48})`);
   if (skin === 'scuffed') gradient.addColorStop(.2, `rgba(${color}, .43)`);
   gradient.addColorStop(.42, `rgba(${color}, ${skin === 'scuffed' ? .21 : .24})`);
@@ -51,11 +53,46 @@ export function faceFrame(points) {
   return { right, up, normal, quaternion };
 }
 
-function makeDie(dice, skin, scuffedFont) {
+function makeDie(dice, skin, fonts) {
   const shape = modelFor(dice);
   const group = new THREE.Group();
   const faceFrames = new Map();
-  if (skin === 'dragonflame' && dice === 'd20' && scuffedFont) {
+  if (skin === 'classic' && dice === 'd20' && fonts.classic) {
+    if (!sharedLightningD20) {
+      const frames = new Map(shape.faces.map((face) => {
+        const points = face.vertices.map((vertex) => new THREE.Vector3(...shape.vertices[vertex]));
+        return [face.label, faceFrame(points).quaternion];
+      }));
+      const pulse = lightningD20Pulse();
+      sharedLightningD20 = {
+        pulse,
+        body: lightningD20Surface(shape),
+        material: lightningD20Material(shape, pulse),
+        veins: lightningD20Veins(),
+        veinMaterials: lightningD20VeinMaterials(shape, pulse),
+        numbers: lightningD20Numbers(shape, fonts.classic),
+        numberMaterials: lightningD20NumberMaterials(shape),
+        faceFrames: frames,
+      };
+    }
+    const parts = [
+      ...sharedLightningD20.veins.map((geometry, index) => [geometry, sharedLightningD20.veinMaterials[index]]),
+      [sharedLightningD20.body, sharedLightningD20.material],
+      [sharedLightningD20.numbers.grooveGeometry, sharedLightningD20.numberMaterials.groove],
+      [sharedLightningD20.numbers.paintGeometry, sharedLightningD20.numberMaterials.paint],
+    ];
+    for (const [geometry, material] of parts) {
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.userData.shared = true;
+      const veinIndex = sharedLightningD20.veins.indexOf(geometry);
+      if (veinIndex >= 0) mesh.renderOrder = .2 + veinIndex * .05;
+      if (geometry === sharedLightningD20.numbers.grooveGeometry) mesh.renderOrder = 1;
+      if (geometry === sharedLightningD20.numbers.paintGeometry) mesh.renderOrder = 2;
+      group.add(mesh);
+    }
+    return { group, faceFrames: sharedLightningD20.faceFrames };
+  }
+  if (skin === 'dragonflame' && dice === 'd20' && fonts.dragonflame) {
     if (!sharedDragonD20) {
       const frames = new Map(shape.faces.map((face) => {
         const points = face.vertices.map((vertex) => new THREE.Vector3(...shape.vertices[vertex]));
@@ -66,7 +103,7 @@ function makeDie(dice, skin, scuffedFont) {
         material: dragonD20Material(),
         core: dragonD20Core(),
         coreMaterial: dragonD20CoreMaterial(),
-        numbers: dragonD20Numbers(shape, scuffedFont),
+        numbers: dragonD20Numbers(shape, fonts.dragonflame),
         numberMaterials: dragonD20NumberMaterials(),
         faceFrames: frames,
       };
@@ -85,13 +122,13 @@ function makeDie(dice, skin, scuffedFont) {
     }
     return { group, faceFrames: sharedDragonD20.faceFrames };
   }
-  if (skin === 'behir' && dice === 'd20' && scuffedFont) {
+  if (skin === 'behir' && dice === 'd20' && fonts.behir) {
     if (!sharedBehirD20) {
       const frames = new Map(shape.faces.map((face) => {
         const points = face.vertices.map((vertex) => new THREE.Vector3(...shape.vertices[vertex]));
         return [face.label, faceFrame(points).quaternion];
       }));
-      const numbers = behirD20Numbers(shape, scuffedFont);
+      const numbers = behirD20Numbers(shape, fonts.behir);
       const numberMaterials = behirD20NumberMaterials();
       sharedBehirD20 = {
         body: behirD20Surface(shape),
@@ -117,7 +154,7 @@ function makeDie(dice, skin, scuffedFont) {
     }
     return { group, faceFrames: sharedBehirD20.faceFrames };
   }
-  if (skin === 'scuffed' && dice === 'd20' && scuffedFont) {
+  if (skin === 'scuffed' && dice === 'd20' && fonts.scuffed) {
     if (!sharedScuffedD20) {
       const frames = new Map(shape.faces.map((face) => {
         const points = face.vertices.map((vertex) => new THREE.Vector3(...shape.vertices[vertex]));
@@ -125,7 +162,7 @@ function makeDie(dice, skin, scuffedFont) {
       }));
       sharedScuffedD20 = {
         body: scuffedD20Surface(shape),
-        numbers: scuffedD20Numbers(shape, scuffedFont),
+        numbers: scuffedD20Numbers(shape, fonts.scuffed),
         materials: scuffedD20Materials(),
         numberMaterial: scuffedNumberMaterial(),
         faceFrames: frames,
@@ -203,10 +240,13 @@ export function finalRotation(faceFrames, value, cameraQuaternion) {
 }
 
 export class DiceView {
-  constructor(stage, labels, scuffedFont = null) {
+  constructor(stage, labels, fonts) {
     this.stage = stage;
     this.labels = labels;
-    this.scuffedFont = scuffedFont;
+    this.fonts = fonts;
+    this.lightningRaf = null;
+    this.lightningLastFrame = 0;
+    this.lightningSurgeAt = null;
     this.scene = new THREE.Scene();
     this.camera = new THREE.OrthographicCamera(-5, 5, 4, -4, .1, 100);
     this.camera.position.set(0, 13, 7);
@@ -219,6 +259,7 @@ export class DiceView {
     this.dragonEnvironment = null;
     this.scuffedEnvironment = null;
     this.behirEnvironment = null;
+    this.lightningEnvironment = null;
     const ambient = new THREE.HemisphereLight(0xffffff, 0x7d4e37, 2.15);
     this.scene.add(ambient);
     const key = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -236,6 +277,8 @@ export class DiceView {
     this.scene.add(scuffedAmbient);
     const behirAmbient = new THREE.AmbientLight(0x1c2a4e, 0);
     this.scene.add(behirAmbient);
+    const lightningAmbient = new THREE.AmbientLight(0x4c360e, 0);
+    this.scene.add(lightningAmbient);
     this.ambient = ambient;
     this.key = key;
     this.rim = rim;
@@ -243,6 +286,7 @@ export class DiceView {
     this.dragonAmbient = dragonAmbient;
     this.scuffedAmbient = scuffedAmbient;
     this.behirAmbient = behirAmbient;
+    this.lightningAmbient = lightningAmbient;
     this.skin = 'classic';
     this.stage.dataset.skin = this.skin;
     this.displayState = null;
@@ -270,6 +314,7 @@ export class DiceView {
   }
 
   clear() {
+    this.stopLightningIdle();
     this.token++;
     this.renderer.domElement.style.filter = '';
     this.displayState = null;
@@ -295,13 +340,49 @@ export class DiceView {
     this.labels.replaceChildren();
   }
 
+  updateLightningPulse(now) {
+    if (!sharedLightningD20) return;
+    sharedLightningD20.pulse.time.value = now / 1000;
+    if (this.lightningSurgeAt === null) {
+      sharedLightningD20.pulse.surge.value = 0;
+      return;
+    }
+    const elapsed = now - this.lightningSurgeAt;
+    sharedLightningD20.pulse.surge.value = elapsed < 120 ? 1 : Math.max(0, 1 - (elapsed - 120) / 350);
+    if (elapsed >= 470) this.lightningSurgeAt = null;
+  }
+
+  stopLightningIdle() {
+    if (this.lightningRaf !== null) cancelAnimationFrame(this.lightningRaf);
+    this.lightningRaf = null;
+    this.lightningLastFrame = 0;
+  }
+
+  startLightningIdle() {
+    if (this.lightningRaf !== null) return;
+    const frame = (now) => {
+      if (this.skin !== 'classic' || this.displayState?.dice !== 'd20' || !sharedLightningD20) {
+        this.lightningRaf = null;
+        return;
+      }
+      if (now - this.lightningLastFrame >= 33) {
+        this.updateLightningPulse(now);
+        if (document.visibilityState !== 'hidden') this.render();
+        this.lightningLastFrame = now;
+      }
+      this.lightningRaf = requestAnimationFrame(frame);
+    };
+    this.lightningRaf = requestAnimationFrame(frame);
+  }
+
   applySkinLighting(dice) {
     const skin = this.skin;
     const behirD20 = skin === 'behir' && dice === 'd20';
     const dragonD20 = skin === 'dragonflame' && dice === 'd20';
-    this.rim.color.setHex(behirD20 ? 0x54e1ff : dragonD20 ? 0xff5c3a : skin === 'scuffed' ? 0xd2cec6 : SKINS[skin].rim);
-    this.rim.position.set(5, behirD20 || dragonD20 ? 1 : 4, -6);
-    const environmentKey = skin === 'dragonflame' ? 'dragonEnvironment' : skin === 'scuffed' ? 'scuffedEnvironment' : behirD20 ? 'behirEnvironment' : null;
+    const lightningD20 = skin === 'classic' && dice === 'd20';
+    this.rim.color.setHex(behirD20 ? 0x54e1ff : dragonD20 ? 0xff5c3a : lightningD20 ? 0xfff3a9 : skin === 'scuffed' ? 0xd2cec6 : SKINS[skin].rim);
+    this.rim.position.set(5, behirD20 || dragonD20 || lightningD20 ? 1 : 4, -6);
+    const environmentKey = skin === 'dragonflame' ? 'dragonEnvironment' : skin === 'scuffed' ? 'scuffedEnvironment' : behirD20 ? 'behirEnvironment' : lightningD20 ? 'lightningEnvironment' : null;
     if (environmentKey && !this[environmentKey]) {
       const environment = new RoomEnvironment();
       const pmrem = new THREE.PMREMGenerator(this.renderer);
@@ -310,18 +391,19 @@ export class DiceView {
       environment.dispose();
     }
     this.scene.environment = environmentKey ? this[environmentKey] : null;
-    this.renderer.toneMapping = skin === 'dragonflame' || skin === 'scuffed' || behirD20 ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
-    this.renderer.toneMappingExposure = dragonD20 ? .94 : skin === 'dragonflame' ? .87 : skin === 'scuffed' ? .84 : behirD20 ? 1.05 : 1;
-    this.ambient.intensity = skin === 'dragonflame' || skin === 'scuffed' || behirD20 ? 0 : 2.15;
+    this.renderer.toneMapping = skin === 'dragonflame' || skin === 'scuffed' || behirD20 || lightningD20 ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+    this.renderer.toneMappingExposure = dragonD20 ? .94 : skin === 'dragonflame' ? .87 : skin === 'scuffed' ? .84 : behirD20 ? 1.05 : lightningD20 ? .82 : 1;
+    this.ambient.intensity = skin === 'dragonflame' || skin === 'scuffed' || behirD20 || lightningD20 ? 0 : 2.15;
     this.dragonAmbient.color.setHex(dragonD20 ? 0x401010 : 0x78463c);
     this.dragonAmbient.intensity = dragonD20 ? .62 : skin === 'dragonflame' ? .85 : 0;
     this.scuffedAmbient.intensity = skin === 'scuffed' ? .8 : 0;
     this.behirAmbient.intensity = behirD20 ? .7 : 0;
-    this.key.color.setHex(behirD20 ? 0xdae8ff : dragonD20 ? 0xffe4d2 : skin === 'dragonflame' ? 0xffd6aa : skin === 'scuffed' ? 0xece4d8 : 0xffffff);
-    this.key.intensity = behirD20 ? 2 : dragonD20 ? 1.85 : skin === 'dragonflame' ? 2.1 : skin === 'scuffed' ? 1.9 : 2.2;
-    this.rim.intensity = behirD20 ? 1.3 : dragonD20 ? 1.18 : skin === 'dragonflame' ? 0 : skin === 'scuffed' ? 1.16 : 1.15;
-    this.fill.color.setHex(behirD20 ? 0x78aaf5 : dragonD20 ? 0xff9a78 : skin === 'scuffed' ? 0xaab0ba : 0xffaa8c);
-    this.fill.intensity = behirD20 ? .85 : dragonD20 ? .74 : skin === 'dragonflame' ? .65 : skin === 'scuffed' ? .72 : 0;
+    this.lightningAmbient.intensity = lightningD20 ? .43 : 0;
+    this.key.color.setHex(behirD20 ? 0xdae8ff : dragonD20 ? 0xffe4d2 : lightningD20 ? 0xffecb9 : skin === 'dragonflame' ? 0xffd6aa : skin === 'scuffed' ? 0xece4d8 : 0xffffff);
+    this.key.intensity = behirD20 ? 2 : dragonD20 ? 1.85 : lightningD20 ? 1.35 : skin === 'dragonflame' ? 2.1 : skin === 'scuffed' ? 1.9 : 2.2;
+    this.rim.intensity = behirD20 ? 1.3 : dragonD20 ? 1.18 : lightningD20 ? .74 : skin === 'dragonflame' ? 0 : skin === 'scuffed' ? 1.16 : 1.15;
+    this.fill.color.setHex(behirD20 ? 0x78aaf5 : dragonD20 ? 0xff9a78 : lightningD20 ? 0xffcc7d : skin === 'scuffed' ? 0xaab0ba : 0xffaa8c);
+    this.fill.intensity = behirD20 ? .85 : dragonD20 ? .74 : lightningD20 ? .47 : skin === 'dragonflame' ? .65 : skin === 'scuffed' ? .72 : 0;
   }
 
   setSkin(skin) {
@@ -348,6 +430,7 @@ export class DiceView {
     if (!current) return false;
     const positions = this.items.map((item) => ({ x: item.root.position.x, z: item.root.position.z }));
     this.currentAnimation = null;
+    this.lightningSurgeAt = performance.now();
     this.show(current.dice, current.result.quantity, current.result.mode, current.result, positions);
     current.resolve(true);
     return true;
@@ -371,7 +454,7 @@ export class DiceView {
     const baseScale = dice === 'd100' && quantity === 1
       ? pair ? 1.3 : 1.5
       : Math.min(pair ? 1.1 : 1.5, xStep / (pair ? 3.85 : 1.8), zStep / 1.7);
-    const scale = (this.skin === 'behir' || this.skin === 'dragonflame') && dice === 'd20' && !pair ? baseScale * 1.08 : baseScale;
+    const scale = this.skin === 'classic' && dice === 'd20' && !pair ? baseScale * 1.2 : (this.skin === 'behir' || this.skin === 'dragonflame') && dice === 'd20' && !pair ? baseScale * 1.08 : baseScale;
     for (let slot = 0; slot < quantity; slot++) {
       const row = Math.floor(slot / columns);
       const inRow = Math.min(columns, quantity - row * columns);
@@ -379,7 +462,7 @@ export class DiceView {
       const centerX = (column - (inRow - 1) / 2) * xStep;
       const centerZ = (row - (rows - 1) / 2) * zStep;
       for (let member = 0; member < (pair ? 2 : 1); member++) {
-        const model = makeDie(dice, this.skin, this.scuffedFont);
+        const model = makeDie(dice, this.skin, this.fonts);
         const root = new THREE.Group();
         const placement = positions?.[this.items.length];
         root.position.set(placement?.x ?? centerX + (pair ? (member - .5) * scale * (dice === 'd100' ? 2.1 : 1.75) : 0), 0, placement?.z ?? centerZ);
@@ -387,11 +470,12 @@ export class DiceView {
         root.add(model.group);
         const behirD20 = this.skin === 'behir' && dice === 'd20';
         const dragonD20 = this.skin === 'dragonflame' && dice === 'd20';
-        const contactShadow = this.skin === 'dragonflame' || this.skin === 'scuffed' || behirD20;
-        const shadowOpacity = behirD20 || dragonD20 ? .58 : this.skin === 'scuffed' ? .6 : .55;
-        const shadowOffset = this.skin === 'scuffed' ? .48 : behirD20 || dragonD20 ? .6 : contactShadow ? .28 : 0;
+        const lightningD20 = this.skin === 'classic' && dice === 'd20';
+        const contactShadow = this.skin === 'dragonflame' || this.skin === 'scuffed' || behirD20 || lightningD20;
+        const shadowOpacity = behirD20 || dragonD20 || lightningD20 ? .58 : this.skin === 'scuffed' ? .6 : .55;
+        const shadowOffset = this.skin === 'scuffed' ? .48 : behirD20 || dragonD20 || lightningD20 ? .6 : contactShadow ? .28 : 0;
         const shadow = contactShadow
-          ? new THREE.Mesh(new THREE.PlaneGeometry(scale * 2.25, scale * 2.25), new THREE.MeshBasicMaterial({ map: contactShadowTexture(dragonD20 ? 'dragonD20' : this.skin), transparent: true, opacity: shadowOpacity, depthWrite: false, side: THREE.DoubleSide }))
+          ? new THREE.Mesh(new THREE.PlaneGeometry(scale * 2.25, scale * 2.25), new THREE.MeshBasicMaterial({ map: contactShadowTexture(dragonD20 ? 'dragonD20' : lightningD20 ? 'lightningD20' : this.skin), transparent: true, opacity: shadowOpacity, depthWrite: false, side: THREE.DoubleSide }))
           : new THREE.Mesh(new THREE.CircleGeometry(scale * 1.05, 32), new THREE.MeshBasicMaterial({ color: 0x552c1d, transparent: true, opacity: .13, depthWrite: false }));
         shadow.rotation.x = -Math.PI / 2;
         shadow.position.set(root.position.x, -1.12 * scale, root.position.z + shadowOffset * scale);
@@ -424,6 +508,20 @@ export class DiceView {
           ring.position.y = -1.1 * scale;
           item.root.add(ring);
         } else item.model.group.traverse((part) => {
+          if (this.skin === 'classic' && dice === 'd20' && part.userData.shared) {
+            if (part.geometry === sharedLightningD20.body) part.material = lightningD20Material(modelFor('d20'), sharedLightningD20.pulse, true);
+            else {
+              const veinIndex = sharedLightningD20.veins.indexOf(part.geometry);
+              part.material = part.material.clone();
+              if (veinIndex >= 0) {
+                part.material.onBeforeCompile = sharedLightningD20.veinMaterials[veinIndex].onBeforeCompile;
+                part.material.customProgramCacheKey = sharedLightningD20.veinMaterials[veinIndex].customProgramCacheKey;
+                part.material.opacity *= .52;
+              } else part.material.color.lerp(new THREE.Color(part.geometry === sharedLightningD20.numbers.paintGeometry ? 0x4e340a : 0x2a1804), .46);
+            }
+            part.userData.ownedMaterials = true;
+            return;
+          }
           if (this.skin === 'behir' && dice === 'd20' && part.userData.shared) {
             if (part.geometry === sharedBehirD20.body) part.material = behirD20Material(true);
             else if (part.geometry === sharedBehirD20.core) part.material = behirD20CoreMaterial(true);
@@ -465,10 +563,13 @@ export class DiceView {
       }
     }
     this.render();
+    if (this.skin === 'classic' && dice === 'd20' && sharedLightningD20) this.startLightningIdle();
   }
 
   animate(dice, result) {
     this.show(dice, result.quantity, result.mode, null);
+    this.stopLightningIdle();
+    if (this.skin === 'classic' && dice === 'd20' && sharedLightningD20) sharedLightningD20.pulse.rolling.value = 1;
     this.labels.replaceChildren();
     const token = this.token;
     this.items.forEach((item) => {
@@ -538,11 +639,14 @@ export class DiceView {
           } else item.shadow.material.opacity = item.shadow.userData.baseOpacity / (1 + item.root.position.y * .65);
         });
         previousTime = now;
+        if (this.skin === 'classic' && dice === 'd20' && sharedLightningD20) this.updateLightningPulse(now);
         this.render();
         if (progress < 1) requestAnimationFrame(frame);
         else {
           const positions = this.items.map((item) => ({ x: item.root.position.x, z: item.root.position.z }));
           this.currentAnimation = null;
+          this.lightningSurgeAt = now;
+          if (sharedLightningD20) sharedLightningD20.pulse.rolling.value = 0;
           this.show(dice, result.quantity, result.mode, result, positions);
           resolve(true);
         }
