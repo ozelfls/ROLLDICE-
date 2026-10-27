@@ -27,6 +27,7 @@ function createWindow() {
     minHeight: 640,
     backgroundColor: '#12191c',
     title: 'Dado RPG',
+    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
     autoHideMenuBar: true,
     show: false,
     webPreferences: {

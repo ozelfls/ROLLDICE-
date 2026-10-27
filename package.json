@@ -8,6 +8,7 @@
     "build:css": "node scripts/build-css.mjs",
     "build:js": "node scripts/build-js.mjs",
     "build": "npm run build:css && npm run build:js",
+    "package:win": "npm run build && electron-builder --win portable --x64",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron .",
     "smoke:desktop": "npm run build && node scripts/desktop-smoke.mjs",
@@ -20,8 +21,31 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",
     "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.25.0",
     "postcss": "^8.5.0",
     "tailwindcss": "^4.1.0"
+  },
+  "build": {
+    "appId": "com.ozelfls.roll-dice",
+    "productName": "Dado RPG",
+    "asar": true,
+    "directories": {
+      "output": "dist-package"
+    },
+    "files": [
+      "electron/**/*",
+      "src/index.html",
+      "dist/**/*",
+      "assets/fonts/**/*",
+      "assets/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "assets/icon.ico",
+      "artifactName": "Dado-RPG-${version}-portable-${arch}.${ext}",
+      "signExecutable": false
+    }
   }
 }

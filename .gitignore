@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-package/
+release/
 *.log
 character_data.json
 assets/fonts/TrajanPro-Bold.otf
